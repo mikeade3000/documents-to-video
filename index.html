@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Adelani Doc-to-Video</title>
+  <meta name="description" content="Turn PowerPoint, Word and PDF files into narrated MP4 videos with a male or female voice, split into parts of 3–4 minutes." />
+  <style>
+    :root {
+      --bg: #f4f6fb;
+      --card: #ffffff;
+      --text: #0f172a;
+      --muted: #5b6b83;
+      --line: #e2e8f0;
+      --accent: #2563eb;
+      --accent-ink: #ffffff;
+      --accent-soft: #e8efff;
+      --ok: #15803d;
+      --warn: #b45309;
+      --err: #b91c1c;
+      --radius: 12px;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) {
+        --bg: #0b1120; --card: #131c2e; --text: #e5ecf6; --muted: #94a3b8; --line: #24314a;
+        --accent: #60a5fa; --accent-ink: #0b1120; --accent-soft: #1b2a47;
+        --ok: #4ade80; --warn: #fbbf24; --err: #f87171;
+      }
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif; }
+    a { color: var(--accent); }
+    header { padding: 28px 16px 8px; text-align: center; }
+    header h1 { margin: 0 0 4px; font-size: 1.7rem; letter-spacing: -0.01em; }
+    header p { margin: 0 auto; color: var(--muted); max-width: 680px; }
+    main { max-width: 1040px; margin: 0 auto; padding: 16px; display: grid; gap: 16px; }
+    .card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 20px; }
+    .card h2 { margin: 0 0 14px; font-size: 1.1rem; display: flex; align-items: center; gap: 10px; }
+    .step { display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: var(--accent); color: var(--accent-ink); font-size: 0.85rem; font-weight: 700; }
+    .drop { border: 2px dashed var(--line); border-radius: var(--radius); padding: 28px 16px; text-align: center; cursor: pointer; transition: border-color .15s, background .15s; }
+    .drop:hover, .drop.over { border-color: var(--accent); background: var(--accent-soft); }
+    .drop strong { display: block; font-size: 1.05rem; }
+    .drop small { color: var(--muted); }
+    .file-info { margin-top: 10px; color: var(--muted); font-size: 0.92rem; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px 18px; }
+    label.field { display: grid; gap: 6px; font-weight: 600; font-size: 0.9rem; }
+    label.field span.hint { font-weight: 400; color: var(--muted); font-size: 0.82rem; }
+    select, input[type="text"], input[type="password"], textarea {
+      width: 100%; padding: 9px 11px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--text); font: inherit;
+    }
+    textarea { resize: vertical; min-height: 70px; }
+    input[type="range"] { width: 100%; accent-color: var(--accent); }
+    .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; overflow: hidden; }
+    .seg input { display: none; }
+    .seg label { padding: 7px 16px; cursor: pointer; font-weight: 600; font-size: 0.9rem; }
+    .seg input:checked + label { background: var(--accent); color: var(--accent-ink); }
+    .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+    .check { display: flex; gap: 8px; align-items: center; font-size: 0.92rem; }
+    button { font: inherit; font-weight: 600; border-radius: 8px; border: 1px solid var(--line); padding: 9px 16px; cursor: pointer; background: var(--card); color: var(--text); }
+    button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+    button:disabled { opacity: .55; cursor: not-allowed; }
+    .ai-box { border: 1px solid var(--line); border-radius: 10px; padding: 14px; margin-top: 14px; display: grid; gap: 12px; }
+    .muted { color: var(--muted); font-size: 0.88rem; }
+    .summary { display: flex; gap: 18px; flex-wrap: wrap; margin-bottom: 12px; font-size: 0.92rem; }
+    .summary b { font-size: 1.05rem; }
+    .script-list { display: grid; gap: 12px; max-height: 70vh; overflow: auto; padding-right: 4px; }
+    .script-item { display: grid; grid-template-columns: 220px 1fr; gap: 14px; border: 1px solid var(--line); border-radius: 10px; padding: 12px; }
+    .script-item canvas { width: 100%; border-radius: 6px; border: 1px solid var(--line); }
+    .script-item .meta { font-size: 0.8rem; color: var(--muted); margin-top: 4px; }
+    .script-item .fields { display: grid; gap: 8px; }
+    .script-item textarea.narr { min-height: 96px; }
+    @media (max-width: 640px) { .script-item { grid-template-columns: 1fr; } }
+    .progress { height: 10px; background: var(--line); border-radius: 999px; overflow: hidden; }
+    .progress > div { height: 100%; width: 0; background: var(--accent); transition: width .2s; }
+    .status { margin-top: 8px; font-size: 0.9rem; color: var(--muted); }
+    .status.err { color: var(--err); }
+    .results { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; margin-top: 14px; }
+    .result { border: 1px solid var(--line); border-radius: 10px; padding: 10px; display: grid; gap: 8px; }
+    .result video { width: 100%; border-radius: 6px; background: #000; }
+    .result .row { justify-content: space-between; }
+    .notice { padding: 10px 12px; border-radius: 8px; background: var(--accent-soft); font-size: 0.9rem; }
+    .notice.warn { color: var(--warn); }
+    .hidden { display: none !important; }
+    footer { text-align: center; color: var(--muted); font-size: 0.85rem; padding: 10px 16px 30px; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Adelani Doc-to-Video</h1>
+    <p>Upload a PowerPoint, Word or PDF file, give instructions, choose a male or female voice, and get narrated MP4 videos. Each video is kept under your chosen length (3–4 minutes); longer documents become several videos.</p>
+  </header>
+
+  <main>
+    <div id="support-warning" class="notice warn hidden"></div>
+
+    <!-- Step 1 -->
+    <section class="card">
+      <h2><span class="step">1</span> Upload your document</h2>
+      <div id="drop" class="drop" tabindex="0" role="button" aria-label="Choose a file">
+        <strong>Drop a .pptx, .docx or .pdf file here</strong>
+        <small>or click to choose a file — it never leaves your computer</small>
+        <input id="file" type="file" accept=".pptx,.docx,.pdf" hidden />
+      </div>
+      <div id="file-info" class="file-info"></div>
+    </section>
+
+    <!-- Step 2 -->
+    <section class="card">
+      <h2><span class="step">2</span> Voice, length and look</h2>
+      <div class="grid">
+        <div class="field" style="display:grid;gap:6px;font-weight:600;font-size:.9rem">
+          Narrator voice
+          <div class="seg" role="radiogroup" aria-label="Voice gender">
+            <input type="radio" name="gender" id="g-f" value="female" checked /><label for="g-f">Female</label>
+            <input type="radio" name="gender" id="g-m" value="male" /><label for="g-m">Male</label>
+          </div>
+        </div>
+        <label class="field">Voice
+          <div class="row" style="flex-wrap:nowrap">
+            <select id="voice"></select>
+            <button id="preview-voice" type="button" title="Play a short sample">▶</button>
+          </div>
+        </label>
+        <label class="field">Speaking speed: <output id="speed-out">1.00×</output>
+          <input id="speed" type="range" min="0.8" max="1.3" step="0.05" value="1" />
+        </label>
+        <label class="field">Maximum length per video
+          <select id="max-len">
+            <option value="180">3 minutes</option>
+            <option value="210">3½ minutes</option>
+            <option value="240" selected>4 minutes</option>
+          </select>
+        </label>
+        <label class="field">Slide style
+          <select id="style">
+            <option value="designed">Designed slides (title, points, images)</option>
+            <option value="page">Original pages (PDF only)</option>
+          </select>
+        </label>
+        <label class="field">Colour theme
+          <select id="theme"></select>
+        </label>
+        <label class="field">Resolution
+          <select id="resolution">
+            <option value="1280x720" selected>HD 720p (1280×720)</option>
+            <option value="1920x1080">Full HD 1080p (1920×1080)</option>
+          </select>
+        </label>
+        <label class="field">Narration source
+          <select id="source">
+            <option value="notes">Speaker notes when available, else slide text</option>
+            <option value="text">Slide / page text only</option>
+          </select>
+        </label>
+      </div>
+      <div class="row" style="margin-top:14px">
+        <label class="check"><input id="captions" type="checkbox" checked /> Show subtitles (captions) on the video</label>
+      </div>
+    </section>
+
+    <!-- Step 3 -->
+    <section class="card">
+      <h2><span class="step">3</span> Instructions</h2>
+      <label class="field">What should the narrator do?
+        <span class="hint">e.g. “Explain this to first-year nursing students in a friendly tone, keep each slide to about 30 seconds, and end with a short summary.”</span>
+        <textarea id="instructions" rows="3"></textarea>
+      </label>
+      <div class="grid" style="margin-top:12px">
+        <label class="field">Opening line (optional)
+          <input id="intro" type="text" placeholder="Welcome to this short lesson on…" />
+        </label>
+        <label class="field">Closing line (optional)
+          <input id="outro" type="text" placeholder="Thank you for watching." />
+        </label>
+      </div>
+      <div class="ai-box">
+        <label class="check"><input id="use-ai" type="checkbox" /> Let AI (Claude) write the narration script from my instructions</label>
+        <div id="ai-fields" class="hidden" style="display:grid;gap:10px">
+          <label class="field">Anthropic API key
+            <input id="api-key" type="password" autocomplete="off" placeholder="sk-ant-…" />
+            <span class="hint">Sent only from your browser to api.anthropic.com. Get a key at console.anthropic.com.</span>
+          </label>
+          <label class="check"><input id="remember-key" type="checkbox" /> Remember the key on this computer</label>
+        </div>
+        <div class="muted">Without AI, the script is built straight from your document and your opening/closing lines. You can edit every slide's narration in the next step either way.</div>
+      </div>
+      <div class="row" style="margin-top:14px">
+        <button id="build-script" class="primary" disabled>Prepare script</button>
+        <span id="script-status" class="status"></span>
+      </div>
+    </section>
+
+    <!-- Step 4 -->
+    <section id="script-card" class="card hidden">
+      <h2><span class="step">4</span> Review the script</h2>
+      <div class="summary" id="summary"></div>
+      <div class="script-list" id="script-list"></div>
+      <div class="row" style="margin-top:14px">
+        <button id="generate" class="primary">Generate MP4 videos</button>
+        <button id="cancel" class="hidden">Cancel</button>
+      </div>
+      <div style="margin-top:14px" id="progress-wrap" class="hidden">
+        <div class="progress"><div id="progress-bar"></div></div>
+        <div id="gen-status" class="status"></div>
+      </div>
+    </section>
+
+    <!-- Step 5 -->
+    <section id="results-card" class="card hidden">
+      <h2><span class="step">5</span> Your videos</h2>
+      <div class="row">
+        <button id="download-all" class="primary">Download all</button>
+        <span id="results-note" class="muted"></span>
+      </div>
+      <div class="results" id="results"></div>
+    </section>
+  </main>
+
+  <footer>
+    Everything runs in your browser: the voice model downloads once (about 90&nbsp;MB) and is then cached.
+    Works best in desktop Chrome or Edge.
+  </footer>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
