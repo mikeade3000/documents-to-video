@@ -45,4 +45,8 @@ Then open http://localhost:8000/. Pages must be served over http(s), not opened 
 - PowerPoint slides are **redrawn** in a clean template (title, bullet points, the main picture). They are not pixel-perfect copies of the original design. For exact visuals, export the deck to PDF and use **Original pages** style.
 - Old `.ppt` / `.doc` files must be re-saved as `.pptx` / `.docx`.
 - Scanned PDFs (images without text) have no text to read. Type the narration in the script step, or use AI mode.
-- Voice generation speed depends on the computer. A GPU (WebGPU) is much faster than CPU.
+- Voice generation speed depends on the computer. The **Voice engine** setting chooses how it runs:
+  - **Auto** (default): tests the graphics card first, and uses the CPU if the card fails, is slow, or stops responding mid-job.
+  - **CPU:** works everywhere and uses several cores in parallel.
+  - **GPU:** fastest on good graphics cards, but needs a one-time 326 MB model download (the CPU model is 92 MB).
+- Long documents take a while: roughly 1–3 seconds per sentence on CPU. The status line shows a live clock and a time-left estimate. **Cancel** stops immediately, and sentences already recorded are reused when you press Generate again.

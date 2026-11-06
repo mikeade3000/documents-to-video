@@ -146,6 +146,13 @@
             <option value="1920x1080">Full HD 1080p (1920×1080)</option>
           </select>
         </label>
+        <label class="field">Voice engine
+          <select id="engine">
+            <option value="auto" selected>Auto — test the graphics card, else use CPU</option>
+            <option value="cpu">CPU — slower but works on every computer</option>
+            <option value="gpu">Graphics card (GPU) — fastest when supported</option>
+          </select>
+        </label>
         <label class="field">Narration source
           <select id="source">
             <option value="notes">Speaker notes when available, else slide text</option>

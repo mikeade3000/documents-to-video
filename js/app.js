@@ -1,5 +1,5 @@
 import { parseDocument, renderPdfPage } from './parsers.js';
-import { VOICES, loadVoiceEngine, speak, speakAll, splitSentences } from './tts.js';
+import { VOICES, loadVoiceEngine, speak, speakAll, splitSentences, stopVoiceEngine, setEnginePreference, engineLabel } from './tts.js';
 import { THEMES, drawDesignedSlide, drawPageSlide } from './render.js';
 import { planParts, encodePart, checkBrowserSupport, TIMING } from './video.js';
 
@@ -269,12 +269,42 @@ $('preview-voice').addEventListener('click', async () => {
 
 // ---------- step 4: generate ----------
 
+// The status line shows the current step plus a live clock, so it never looks frozen.
+let statusText = '';
+let stepStart = 0;
+let jobStart = 0;
+let ticker = null;
+function showStatus() {
+  if (!statusText) return;
+  const now = performance.now();
+  const step = (now - stepStart) / 1000;
+  const total = (now - jobStart) / 1000;
+  const waiting = step > 15 ? ` · still working (${fmt(step)} on this step)` : '';
+  $('gen-status').textContent = `${statusText}${waiting} · ${fmt(total)} elapsed`;
+}
 function setProgress(frac, text) {
   $('progress-bar').style.width = `${Math.round(frac * 100)}%`;
-  if (text) $('gen-status').textContent = text;
+  if (text && text !== statusText) {
+    statusText = text;
+    stepStart = performance.now();
+  }
+  showStatus();
 }
 
-$('cancel').addEventListener('click', () => { state.cancelled = true; });
+$('engine').addEventListener('change', () => {
+  setEnginePreference($('engine').value);
+  try { localStorage.setItem('d2v-engine', $('engine').value); } catch { /* ignore */ }
+});
+try {
+  const savedEngine = localStorage.getItem('d2v-engine');
+  if (savedEngine) $('engine').value = savedEngine;
+} catch { /* ignore */ }
+setEnginePreference($('engine').value);
+
+$('cancel').addEventListener('click', () => {
+  state.cancelled = true;
+  stopVoiceEngine(); // stops the sentence being recorded right now
+});
 
 $('generate').addEventListener('click', async () => {
   if (state.busy) return;
@@ -287,6 +317,10 @@ $('generate').addEventListener('click', async () => {
   $('cancel').classList.remove('hidden');
   $('progress-wrap').classList.remove('hidden');
   $('gen-status').className = 'status';
+  jobStart = performance.now();
+  statusText = '';
+  clearInterval(ticker);
+  ticker = setInterval(showStatus, 1000);
   for (const r of state.results) URL.revokeObjectURL(r.url);
   state.results = [];
   $('results').innerHTML = '';
@@ -302,18 +336,21 @@ $('generate').addEventListener('click', async () => {
   try {
     // 1. Voice engine
     setProgress(0, 'Loading the voice engine…');
-    const device = await loadVoiceEngine((p) => setProgress(p.loaded / p.total * 0.05, `Downloading voice model (first time only): ${Math.round(p.loaded / 1e6)} / ${Math.round(p.total / 1e6)} MB`));
+    await loadVoiceEngine(
+      (p) => setProgress(p.loaded / p.total * 0.05, `Downloading voice model (first time only): ${Math.round(p.loaded / 1e6)} / ${Math.round(p.total / 1e6)} MB`),
+      (msg) => setProgress(0.05, msg),
+    );
 
     // 2. Speech for every sentence
     const entries = state.script.map((s) => ({ ...s, sentences: splitSentences(s.narration) }));
     const texts = entries.flatMap((e) => e.sentences);
     const t0 = performance.now();
-    const audio = await speakAll(texts, voice, speed, (done, nWorkers) => {
+    setProgress(0.05, `Recording narration (${engineLabel()}): working on sentence 1 of ${texts.length}…`);
+    const audio = await speakAll(texts, voice, speed, (done) => {
       const elapsed = (performance.now() - t0) / 1000;
       const eta = done > 2 ? Math.round((elapsed / done) * (texts.length - done)) : null;
-      const engine = device === 'webgpu' ? 'GPU' : `CPU × ${nWorkers}`;
       setProgress(0.05 + (done / texts.length) * 0.55,
-        `Recording narration (${engine}): sentence ${done} of ${texts.length}${eta != null ? ` — about ${fmt(eta)} left` : ''}`);
+        `Recording narration (${engineLabel()}): ${done} of ${texts.length} sentences done${eta != null ? ` — about ${fmt(eta)} left` : ''}`);
     }, () => state.cancelled);
     let k = 0;
     for (const e of entries) {
@@ -338,12 +375,17 @@ $('generate').addEventListener('click', async () => {
       });
       addResult(res, p + 1, parts.length, parts[p]);
     }
-    setProgress(1, `✓ Done — ${parts.length} video${parts.length > 1 ? 's' : ''} created.`);
+    clearInterval(ticker);
+    setProgress(1, `✓ Done — ${parts.length} video${parts.length > 1 ? 's' : ''} created`);
   } catch (e) {
     console.error(e);
+    clearInterval(ticker);
     $('gen-status').className = 'status err';
-    $('gen-status').textContent = e.message || String(e);
+    $('gen-status').textContent = state.cancelled
+      ? 'Cancelled. Sentences already recorded are kept, so pressing Generate again continues faster.'
+      : (e.message || String(e));
   } finally {
+    clearInterval(ticker);
     state.busy = false;
     $('generate').disabled = false;
     $('build-script').disabled = false;
