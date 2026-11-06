@@ -8,6 +8,20 @@ Turns **PowerPoint (.pptx)**, **Word (.docx)** and **PDF** files into narrated *
 4. **Review the script**: every slide's title, on-screen points and narration can be edited before rendering.
 5. **Generate**: the narration is recorded with the voice model, then the videos are built. When the narration is longer than the limit, it is split into *Part 1 of N*, *Part 2 of N* and so on. Each part starts with a title card and stays under the limit. If a single slide's narration is longer than the limit, that slide is continued in the next part.
 
+### Voice services
+
+Choose the voice service in step 2:
+
+| Service | Speed | Cost | Setup |
+|---|---|---|---|
+| **Free in-browser voice** (default) | Depends on the computer: roughly 1–3 s per sentence on CPU | Free | None |
+| **Google Cloud Text-to-Speech** | About 30–60 s for a long document | Free allowance each month (1 million characters for Neural2 voices), then pay per character | Create a project at console.cloud.google.com, enable **Cloud Text-to-Speech API**, set up billing, then create an API key under *APIs & Services → Credentials* |
+| **Microsoft Azure Speech** (includes Nigerian, Kenyan and South African English voices) | About 30–60 s for a long document | Free tier (F0): 0.5 million characters/month but only 20 requests per minute, so use the Standard (S0) tier for speed | Create a **Speech service** resource in portal.azure.com, then copy *Key 1* and the *Region* from *Keys and Endpoint* |
+
+Keys are typed into the page and sent only from the visitor's browser to Google or Microsoft. Tick *Remember the key* to keep them on that computer.
+
+**Let visitors use your Google key:** put it in `js/config.js` (`googleApiKey`). The key is visible in the page source, so in Google Cloud Console restrict it to your website (*Application restrictions → Websites*, e.g. `https://mikeade3000.github.io/*`) and to the *Cloud Text-to-Speech API* only, and set a budget alert. Never put an Azure key in `config.js`: Azure keys can't be restricted to a website.
+
 ### How it works
 
 Everything runs client-side, so the site can be hosted on GitHub Pages or any static host:
@@ -16,6 +30,7 @@ Everything runs client-side, so the site can be hosted on GitHub Pages or any st
 |---|---|
 | PPTX / DOCX reading | [JSZip](https://stuk.github.io/jszip/) + the browser's XML parser |
 | PDF reading and page rendering | [PDF.js](https://mozilla.github.io/pdf.js/) |
+| Cloud voices (optional) | Google Cloud Text-to-Speech REST API, Azure Speech REST API |
 | Voice (text-to-speech) | [Kokoro-82M](https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX) via `kokoro-js`. Uses WebGPU when available, otherwise several CPU workers. The ~90 MB model downloads once and is then cached. |
 | AI script writing (optional) | Claude via the Anthropic JavaScript SDK, called from the browser with the user's own key |
 | MP4 encoding | WebCodecs (H.264 + AAC) and `mp4-muxer` |

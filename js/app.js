@@ -2,6 +2,8 @@ import { parseDocument, renderPdfPage } from './parsers.js';
 import { VOICES, loadVoiceEngine, speak, speakAll, splitSentences, stopVoiceEngine, setEnginePreference, engineLabel } from './tts.js';
 import { THEMES, drawDesignedSlide, drawPageSlide } from './render.js';
 import { planParts, encodePart, checkBrowserSupport, TIMING } from './video.js';
+import { CLOUD_VOICES, cloudSpeak, cloudSpeakAll } from './cloud-tts.js';
+import { CONFIG } from './config.js';
 
 const $ = (id) => document.getElementById(id);
 const WPM = 140; // average narration pace at 1.0x
@@ -24,13 +26,61 @@ if (support) {
 
 for (const [id, th] of Object.entries(THEMES)) $('theme').add(new Option(th.name, id));
 
+// ---------- voice service (free in-browser, Google Cloud or Azure) ----------
+
+const store = {
+  get(k) { try { return localStorage.getItem(k); } catch { return null; } },
+  set(k, v) { try { if (v == null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch { /* ignore */ } },
+};
+const provider = () => $('provider').value;
+const ownerGoogleKey = (CONFIG.googleApiKey || '').trim();
+
+function cloudCreds() {
+  return {
+    googleKey: $('google-key').value.trim() || ownerGoogleKey,
+    azureKey: $('azure-key').value.trim(),
+    azureRegion: $('azure-region').value.trim(),
+  };
+}
+
+function saveCloudCreds() {
+  const remember = $('remember-cloud').checked;
+  store.set('d2v-remember-cloud', remember ? '1' : null);
+  store.set('d2v-google-key', remember ? $('google-key').value.trim() || null : null);
+  store.set('d2v-azure-key', remember ? $('azure-key').value.trim() || null : null);
+  store.set('d2v-azure-region', remember ? $('azure-region').value.trim() || null : null);
+}
+
 function fillVoices() {
   const g = document.querySelector('input[name="gender"]:checked').value;
+  const list = provider() === 'local' ? VOICES[g] : CLOUD_VOICES[provider()][g];
+  const previous = $('voice').value;
   $('voice').innerHTML = '';
-  for (const v of VOICES[g]) $('voice').add(new Option(v.label, v.id));
+  for (const v of list) $('voice').add(new Option(v.label, v.id));
+  if (list.some((v) => v.id === previous)) $('voice').value = previous;
 }
+
+function updateProvider() {
+  const p = provider();
+  $('google-fields').classList.toggle('hidden', p !== 'google' || !!ownerGoogleKey);
+  $('azure-fields').classList.toggle('hidden', p !== 'azure');
+  $('remember-cloud-row').classList.toggle('hidden', p === 'local' || (p === 'google' && !!ownerGoogleKey));
+  $('cloud-note').classList.toggle('hidden', p === 'local');
+  $('engine-field').classList.toggle('hidden', p !== 'local');
+  store.set('d2v-provider', p);
+  fillVoices();
+}
+
+$('google-key').value = store.get('d2v-google-key') || '';
+$('azure-key').value = store.get('d2v-azure-key') || '';
+$('azure-region').value = store.get('d2v-azure-region') || '';
+$('remember-cloud').checked = store.get('d2v-remember-cloud') === '1';
+$('provider').value = store.get('d2v-provider') || CONFIG.defaultProvider || 'local';
+if (!$('provider').value) $('provider').value = 'local';
+['google-key', 'azure-key', 'azure-region', 'remember-cloud'].forEach((id) => $(id).addEventListener('change', saveCloudCreds));
+$('provider').addEventListener('change', updateProvider);
 document.querySelectorAll('input[name="gender"]').forEach((r) => r.addEventListener('change', fillVoices));
-fillVoices();
+updateProvider();
 
 $('speed').addEventListener('input', () => {
   $('speed-out').textContent = `${Number($('speed').value).toFixed(2)}×`;
@@ -254,13 +304,19 @@ $('preview-voice').addEventListener('click', async () => {
   const old = btn.textContent;
   btn.textContent = '…';
   try {
-    await loadVoiceEngine((p) => { btn.textContent = `${Math.round((p.loaded / p.total) * 100)}%`; });
-    btn.textContent = '…';
     const label = $('voice').selectedOptions[0].textContent.split(' — ')[0];
-    const out = await speak(`Hello, I'm ${label}. I will narrate your presentation.`, $('voice').value, Number($('speed').value));
+    const sample = `Hello, I'm ${label}. I will narrate your presentation.`;
+    let out;
+    if (provider() === 'local') {
+      await loadVoiceEngine((p) => { btn.textContent = `${Math.round((p.loaded / p.total) * 100)}%`; });
+      btn.textContent = '…';
+      out = await speak(sample, $('voice').value, Number($('speed').value));
+    } else {
+      out = await cloudSpeak(provider(), cloudCreds(), sample, $('voice').value, Number($('speed').value));
+    }
     await play(out.samples, out.sampleRate);
   } catch (err) {
-    alert(`Could not load the voice engine: ${err.message || err}`);
+    alert(`Could not play the voice: ${err.message || err}`);
   } finally {
     btn.disabled = false;
     btn.textContent = old;
@@ -335,23 +391,30 @@ $('generate').addEventListener('click', async () => {
 
   try {
     // 1. Voice engine
-    setProgress(0, 'Loading the voice engine…');
-    await loadVoiceEngine(
-      (p) => setProgress(p.loaded / p.total * 0.05, `Downloading voice model (first time only): ${Math.round(p.loaded / 1e6)} / ${Math.round(p.total / 1e6)} MB`),
-      (msg) => setProgress(0.05, msg),
-    );
+    const cloud = provider() !== 'local';
+    if (!cloud) {
+      setProgress(0, 'Loading the voice engine…');
+      await loadVoiceEngine(
+        (p) => setProgress(p.loaded / p.total * 0.05, `Downloading voice model (first time only): ${Math.round(p.loaded / 1e6)} / ${Math.round(p.total / 1e6)} MB`),
+        (msg) => setProgress(0.05, msg),
+      );
+    }
+    const engine = () => (cloud ? (provider() === 'google' ? 'Google Cloud' : 'Azure') : engineLabel());
 
     // 2. Speech for every sentence
     const entries = state.script.map((s) => ({ ...s, sentences: splitSentences(s.narration) }));
     const texts = entries.flatMap((e) => e.sentences);
     const t0 = performance.now();
-    setProgress(0.05, `Recording narration (${engineLabel()}): working on sentence 1 of ${texts.length}…`);
-    const audio = await speakAll(texts, voice, speed, (done) => {
+    setProgress(0.05, `Recording narration (${engine()}): working on sentence 1 of ${texts.length}…`);
+    const onEach = (done) => {
       const elapsed = (performance.now() - t0) / 1000;
       const eta = done > 2 ? Math.round((elapsed / done) * (texts.length - done)) : null;
       setProgress(0.05 + (done / texts.length) * 0.55,
-        `Recording narration (${engineLabel()}): ${done} of ${texts.length} sentences done${eta != null ? ` — about ${fmt(eta)} left` : ''}`);
-    }, () => state.cancelled);
+        `Recording narration (${engine()}): ${done} of ${texts.length} sentences done${eta != null ? ` — about ${fmt(eta)} left` : ''}`);
+    };
+    const audio = cloud
+      ? await cloudSpeakAll(provider(), cloudCreds(), texts, voice, speed, onEach, () => state.cancelled)
+      : await speakAll(texts, voice, speed, onEach, () => state.cancelled);
     let k = 0;
     for (const e of entries) {
       e.clips = e.sentences.map((text) => {

@@ -59,6 +59,8 @@
     button { font: inherit; font-weight: 600; border-radius: 8px; border: 1px solid var(--line); padding: 9px 16px; cursor: pointer; background: var(--card); color: var(--text); }
     button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
     button:disabled { opacity: .55; cursor: not-allowed; }
+    .provider-box { display: grid; gap: 12px; padding: 14px; margin-bottom: 16px; border: 1px solid var(--line); border-radius: 10px; background: var(--accent-soft); }
+    .provider-box select, .provider-box input { background: var(--card); }
     .ai-box { border: 1px solid var(--line); border-radius: 10px; padding: 14px; margin-top: 14px; display: grid; gap: 12px; }
     .muted { color: var(--muted); font-size: 0.88rem; }
     .summary { display: flex; gap: 18px; flex-wrap: wrap; margin-bottom: 12px; font-size: 0.92rem; }
@@ -107,6 +109,33 @@
     <!-- Step 2 -->
     <section class="card">
       <h2><span class="step">2</span> Voice, length and look</h2>
+      <div class="provider-box">
+        <label class="field">Voice service
+          <select id="provider">
+            <option value="local">Free in-browser voice — no account needed (speed depends on your computer)</option>
+            <option value="google">Google Cloud Text-to-Speech — fast (needs an API key)</option>
+            <option value="azure">Microsoft Azure Speech — fast, includes Nigerian voices (needs a key)</option>
+          </select>
+        </label>
+        <div id="google-fields" class="grid hidden">
+          <label class="field">Google Cloud API key
+            <input id="google-key" type="password" autocomplete="off" placeholder="AIza…" />
+            <span class="hint">Google Cloud Console → enable “Cloud Text-to-Speech API” → APIs &amp; Services → Credentials → Create API key.</span>
+          </label>
+        </div>
+        <div id="azure-fields" class="grid hidden">
+          <label class="field">Azure Speech key
+            <input id="azure-key" type="password" autocomplete="off" placeholder="Key 1 from your Speech resource" />
+            <span class="hint">Azure Portal → create a “Speech service” resource → Keys and Endpoint.</span>
+          </label>
+          <label class="field">Azure region
+            <input id="azure-region" type="text" placeholder="e.g. eastus, westeurope" />
+            <span class="hint">Shown as “Location/Region” next to the key.</span>
+          </label>
+        </div>
+        <label id="remember-cloud-row" class="check hidden"><input id="remember-cloud" type="checkbox" /> Remember the key on this computer</label>
+        <div id="cloud-note" class="muted hidden">Your narration text is sent to the voice service you chose, which charges per character after its free monthly allowance.</div>
+      </div>
       <div class="grid">
         <div class="field" style="display:grid;gap:6px;font-weight:600;font-size:.9rem">
           Narrator voice
@@ -146,7 +175,7 @@
             <option value="1920x1080">Full HD 1080p (1920×1080)</option>
           </select>
         </label>
-        <label class="field">Voice engine
+        <label class="field" id="engine-field">Voice engine
           <select id="engine">
             <option value="auto" selected>Auto — test the graphics card, else use CPU</option>
             <option value="cpu">CPU — slower but works on every computer</option>
@@ -224,7 +253,7 @@
   </main>
 
   <footer>
-    Everything runs in your browser: the voice model downloads once (about 90&nbsp;MB) and is then cached.
+    Your files are processed in your browser. The free voice model downloads once (about 90&nbsp;MB) and is then cached.
     Works best in desktop Chrome or Edge.
   </footer>
 
