@@ -11,7 +11,12 @@
 //
 // defaultProvider: which voice is selected when the page opens: 'local', 'google' or 'azure'.
 
+// apiBase: address of your payment/AI server (the Cloudflare Worker in server/), e.g.
+// 'https://doc-to-video-api.yourname.workers.dev'. Leave empty to switch payments off
+// (downloads become free and the AI narration option is hidden).
+
 export const CONFIG = {
+  apiBase: '',
   googleApiKey: '',
   defaultProvider: 'local',
 };

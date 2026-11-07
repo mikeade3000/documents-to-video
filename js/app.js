@@ -4,6 +4,7 @@ import { THEMES, drawDesignedSlide, drawPageSlide } from './render.js';
 import { planParts, encodePart, checkBrowserSupport, TIMING } from './video.js';
 import { CLOUD_VOICES, cloudSpeak, cloudSpeakAll } from './cloud-tts.js';
 import { CONFIG } from './config.js';
+import { paymentsEnabled, getServerConfig, formatPrice, getReceipt, checkReceipt, purchase, aiScript as requestAiScript } from './payments.js';
 
 const $ = (id) => document.getElementById(id);
 const WPM = 140; // average narration pace at 1.0x
@@ -89,11 +90,30 @@ $('speed').addEventListener('input', () => {
 $('max-len').addEventListener('change', () => state.script.length && renderSummary());
 ['style', 'theme'].forEach((id) => $(id).addEventListener('change', () => state.script.length && renderScript()));
 
-try {
-  const saved = localStorage.getItem('d2v-api-key');
-  if (saved) { $('api-key').value = saved; $('remember-key').checked = true; }
-} catch { /* storage unavailable */ }
-$('use-ai').addEventListener('change', () => $('ai-fields').classList.toggle('hidden', !$('use-ai').checked));
+// ---------- paid features ----------
+
+// Without a payment server configured, AI narration is hidden and downloads are free.
+if (!paymentsEnabled()) {
+  $('ai-box').classList.add('hidden');
+} else {
+  getServerConfig().then((cfg) => {
+    $('ai-price').textContent = `(${formatPrice(cfg.prices.ai, cfg.currency)} per document, ${cfg.aiUsesPerPayment} rewrites)`;
+    $('download-price').textContent = formatPrice(cfg.prices.download, cfg.currency);
+  }).catch(() => {
+    $('ai-status').textContent = 'The payment server is not reachable right now, so paid features are unavailable.';
+  });
+}
+
+async function refreshAiStatus() {
+  if (!paymentsEnabled() || !state.jobId) return;
+  const r = await checkReceipt('ai', state.jobId);
+  $('ai-status').textContent = r ? `✓ Paid for this document — ${r.aiUsesLeft} AI rewrite${r.aiUsesLeft === 1 ? '' : 's'} left.` : '';
+}
+
+async function sha256Hex(buf) {
+  const hash = await crypto.subtle.digest('SHA-256', buf);
+  return [...new Uint8Array(hash)].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
 
 // ---------- step 1: file ----------
 
@@ -114,6 +134,8 @@ async function loadFile(file) {
   $('build-script').disabled = true;
   try {
     state.doc = await parseDocument(file);
+    state.jobId = await sha256Hex(await file.arrayBuffer()); // identifies this document for payments
+    refreshAiStatus();
     const d = state.doc;
     const words = d.slides.reduce((a, s) => a + countWords(s.notes || s.text), 0);
     const unit = d.kind === 'pdf' ? 'pages' : d.kind === 'docx' ? 'sections/slides' : 'slides';
@@ -151,35 +173,34 @@ $('build-script').addEventListener('click', async () => {
   let aiScript = null;
   try {
     if ($('use-ai').checked) {
-      const apiKey = $('api-key').value.trim();
-      if (!apiKey) throw new Error('Enter your Anthropic API key, or untick the AI option.');
-      try {
-        if ($('remember-key').checked) localStorage.setItem('d2v-api-key', apiKey);
-        else localStorage.removeItem('d2v-api-key');
-      } catch { /* ignore */ }
-      $('script-status').textContent = 'Claude is writing the narration script… (this can take a minute for long documents)';
-      const { writeScriptWithClaude, describeApiError } = await import('./script-ai.js');
-      try {
-        const docForAi = {
-          ...state.doc,
-          slides: state.doc.slides.map((s) => ({ ...s, notes: source === 'notes' ? s.notes : '' })),
-        };
-        aiScript = await writeScriptWithClaude({
-          apiKey,
-          doc: docForAi,
-          instructions: $('instructions').value,
-          wordsPerMinute: Math.round(WPM * Number($('speed').value)),
-          maxPartSeconds: Number($('max-len').value),
+      if (!getReceipt('ai', state.jobId) || !(await checkReceipt('ai', state.jobId))) {
+        const cfg = await getServerConfig();
+        const receipt = await purchase('ai', state.jobId, {
+          title: 'AI narration',
+          description: `AI writes the narration for “${state.doc.title}” following your instructions. Includes ${cfg.aiUsesPerPayment} rewrites of this document.`,
         });
-      } catch (err) {
-        throw new Error(describeApiError(err));
+        if (!receipt) throw new Error('Payment cancelled. Untick the AI option to build the script for free.');
       }
+      $('script-status').textContent = 'AI is writing the narration script… (this can take a minute for long documents)';
+      const out = await requestAiScript(state.jobId, {
+        doc: {
+          title: state.doc.title,
+          kind: state.doc.kind,
+          slides: state.doc.slides.map((s) => ({ title: s.title, text: s.text, notes: source === 'notes' ? s.notes : '' })),
+        },
+        instructions: $('instructions').value,
+        wordsPerMinute: Math.round(WPM * Number($('speed').value)),
+        maxPartSeconds: Number($('max-len').value),
+      });
+      const byIndex = new Map(out.slides.map((x) => [x.index, x]));
+      aiScript = state.doc.slides.map((_, i) => byIndex.get(i) || null);
+      refreshAiStatus();
     }
     state.script = state.doc.slides.map((s, i) => {
       const ai = aiScript?.[i];
       return {
         title: ai?.title || s.title,
-        bullets: ai?.bullets || s.bullets,
+        bullets: ai?.bullets?.length ? ai.bullets : s.bullets,
         narration: ai?.narration ?? defaultNarration(s, source),
         image: s.image,
         pdfPage: s.pdfPage,
@@ -192,7 +213,7 @@ $('build-script').addEventListener('click', async () => {
       const last = state.script[state.script.length - 1];
       last.narration = `${last.narration} ${sentence(outro)}`;
     }
-    $('script-status').textContent = aiScript ? '✓ Script written by Claude. Review it below.' : '✓ Script ready. Review and edit it below.';
+    $('script-status').textContent = aiScript ? '✓ Script written by AI. Review it below.' : '✓ Script ready. Review and edit it below.';
     renderScript();
     $('script-card').classList.remove('hidden');
     $('script-card').scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -423,23 +444,17 @@ $('generate').addEventListener('click', async () => {
       });
     }
 
-    // 3. Split into parts and encode
+    // 3. Split into parts and encode (watermarked previews until the download is paid for)
     const parts = planParts(entries, maxLen);
-    for (let p = 0; p < parts.length; p++) {
-      if (state.cancelled) throw new Error('Cancelled.');
-      const base = 0.6 + (p / parts.length) * 0.4;
-      const res = await encodePart(parts[p], {
-        width: W, height: H, fps: 24, theme: th,
-        docTitle: state.doc.title,
-        partNo: p + 1, partCount: parts.length,
-        captions: $('captions').checked,
-        pageMode, pdf: state.doc.pdf,
-        onProgress: (f) => setProgress(base + f * (0.4 / parts.length), `Creating video ${p + 1} of ${parts.length}… ${Math.round(f * 100)}%`),
-      });
-      addResult(res, p + 1, parts.length, parts[p]);
-    }
+    state.lastRun = {
+      parts,
+      jobId: state.jobId,
+      opts: { width: W, height: H, fps: 24, theme: th, docTitle: state.doc.title, captions: $('captions').checked, pageMode, pdf: state.doc.pdf },
+    };
+    const watermark = paymentsEnabled() && !getReceipt('download', state.jobId);
+    await renderParts(watermark, 0.6, 0.4);
     clearInterval(ticker);
-    setProgress(1, `✓ Done — ${parts.length} video${parts.length > 1 ? 's' : ''} created`);
+    setProgress(1, `✓ Done — ${parts.length} video${parts.length > 1 ? 's' : ''} created${watermark ? ' (previews)' : ''}`);
   } catch (e) {
     console.error(e);
     clearInterval(ticker);
@@ -460,7 +475,29 @@ function safeName(s) {
   return s.replace(/[^\w\- ]+/g, '').trim().replace(/\s+/g, '-').slice(0, 60) || 'video';
 }
 
-function addResult(res, partNo, partCount, part) {
+// Encode every part of the last run and show the results.
+async function renderParts(watermark, progressStart, progressSpan) {
+  const { parts, opts } = state.lastRun;
+  for (const r of state.results) URL.revokeObjectURL(r.url);
+  state.results = [];
+  $('results').innerHTML = '';
+  for (let p = 0; p < parts.length; p++) {
+    if (state.cancelled) throw new Error('Cancelled.');
+    const base = progressStart + (p / parts.length) * progressSpan;
+    const res = await encodePart(parts[p], {
+      ...opts,
+      partNo: p + 1,
+      partCount: parts.length,
+      watermark,
+      onProgress: (f) => setProgress(base + f * (progressSpan / parts.length), `${watermark ? 'Creating preview' : 'Creating video'} ${p + 1} of ${parts.length}… ${Math.round(f * 100)}%`),
+    });
+    addResult(res, p + 1, parts.length, parts[p], watermark);
+  }
+  state.watermarked = watermark;
+  $('paywall').classList.toggle('hidden', !watermark);
+}
+
+function addResult(res, partNo, partCount, part, watermark) {
   const url = URL.createObjectURL(res.blob);
   const name = `${safeName(state.doc.title)}${partCount > 1 ? `-part-${partNo}-of-${partCount}` : ''}.mp4`;
   state.results.push({ url, name });
@@ -469,25 +506,72 @@ function addResult(res, partNo, partCount, part) {
   const el = document.createElement('div');
   el.className = 'result';
   el.innerHTML = `
-    <video controls preload="metadata" src="${url}"></video>
-    <div class="row"><strong>Part ${partNo} of ${partCount}</strong><span class="muted">${fmt(res.duration)} · ${(res.blob.size / 1e6).toFixed(1)} MB</span></div>
+    <video controls controlslist="nodownload" preload="metadata" src="${url}"></video>
+    <div class="row"><strong>Part ${partNo} of ${partCount}${watermark ? ' · preview' : ''}</strong><span class="muted">${fmt(res.duration)} · ${(res.blob.size / 1e6).toFixed(1)} MB</span></div>
     <div class="muted">Slides ${first.label.split(' /')[0]}–${last.label.split(' /')[0]}</div>
-    <a class="dl" download="${name}" href="${url}"><button type="button" class="primary" style="width:100%">Download MP4</button></a>`;
+    <button type="button" class="primary dl-btn" style="width:100%">${watermark ? 'Unlock &amp; download MP4' : 'Download MP4'}</button>`;
+  el.querySelector('video').addEventListener('contextmenu', (e) => watermark && e.preventDefault());
+  el.querySelector('.dl-btn').addEventListener('click', () => downloadParts([partNo - 1]));
   $('results').appendChild(el);
   $('results-card').classList.remove('hidden');
+  $('download-all').textContent = watermark ? 'Unlock & download all' : 'Download all';
   $('results-note').textContent = res.audioCodec === 'aac'
     ? 'MP4 (H.264 video, AAC audio).'
     : 'MP4 (H.264 video, Opus audio — this browser has no AAC encoder; use Chrome/Edge on Windows or macOS for AAC).';
 }
 
-$('download-all').addEventListener('click', async () => {
-  for (const r of state.results) {
-    const a = document.createElement('a');
-    a.href = r.url;
-    a.download = r.name;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
+function saveFile(r) {
+  const a = document.createElement('a');
+  a.href = r.url;
+  a.download = r.name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+
+// Pay (if needed), re-render without the watermark, then download.
+async function downloadParts(indexes) {
+  if (state.busy) return;
+  if (state.watermarked) {
+    const jobId = state.lastRun.jobId;
+    let receipt = getReceipt('download', jobId);
+    if (receipt && !(await checkReceipt('download', jobId))) receipt = null;
+    if (!receipt) {
+      receipt = await purchase('download', jobId, {
+        title: 'Download your videos',
+        description: `Clean MP4 videos without watermark for “${state.lastRun.opts.docTitle}” — all ${state.lastRun.parts.length} part${state.lastRun.parts.length > 1 ? 's' : ''}, and any re-renders of this document.`,
+      });
+      if (!receipt) return;
+    }
+    state.busy = true;
+    state.cancelled = false;
+    $('generate').disabled = true;
+    $('progress-wrap').classList.remove('hidden');
+    $('gen-status').className = 'status';
+    jobStart = performance.now();
+    statusText = '';
+    clearInterval(ticker);
+    ticker = setInterval(showStatus, 1000);
+    try {
+      await renderParts(false, 0, 1);
+      setProgress(1, '✓ Payment confirmed — your videos are ready to download');
+    } catch (e) {
+      console.error(e);
+      $('gen-status').className = 'status err';
+      $('gen-status').textContent = e.message || String(e);
+      return;
+    } finally {
+      clearInterval(ticker);
+      state.busy = false;
+      $('generate').disabled = false;
+    }
+    $('results-card').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+  for (const i of indexes) {
+    saveFile(state.results[i]);
     await new Promise((res) => setTimeout(res, 600));
   }
-});
+}
+
+$('download-all').addEventListener('click', () => downloadParts(state.results.map((_, i) => i)));
+

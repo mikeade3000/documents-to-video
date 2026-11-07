@@ -2,7 +2,7 @@
 // with the browser's built-in WebCodecs encoders (H.264 video + AAC audio).
 
 import { Muxer, ArrayBufferTarget } from 'https://cdn.jsdelivr.net/npm/mp4-muxer@5.2.2/+esm';
-import { drawDesignedSlide, drawPageSlide, drawTitleCard, drawCaption, drawProgress, captionChunks } from './render.js';
+import { drawDesignedSlide, drawPageSlide, drawTitleCard, drawCaption, drawProgress, captionChunks, drawWatermark } from './render.js';
 import { renderPdfPage } from './parsers.js';
 
 export const TIMING = {
@@ -119,7 +119,7 @@ export function checkBrowserSupport() {
   return missing.length ? `Your browser is missing: ${missing.join(', ')}. Use a recent desktop Chrome or Edge.` : null;
 }
 
-// Encode one part. opts: { width, height, fps, theme, docTitle, partNo, partCount, captions, pageMode, pdf, onProgress }
+// Encode one part. opts: { width, height, fps, theme, docTitle, partNo, partCount, captions, pageMode, pdf, watermark, onProgress }
 export async function encodePart(part, opts) {
   const { width: W, height: H, fps, theme: th } = opts;
   const total = part.duration;
@@ -165,6 +165,7 @@ export async function encodePart(part, opts) {
   const lastTitle = part.segments[part.segments.length - 1]?.entry.title || '';
   drawTitleCard(ctx, W, H, th, opts.docTitle, opts.partNo, opts.partCount,
     opts.partCount > 1 ? (firstTitle === lastTitle ? firstTitle : `${firstTitle}  →  ${lastTitle}`) : '');
+  if (opts.watermark) drawWatermark(ctx, W, H);
   const titleBitmap = canvas.transferToImageBitmap();
   for (const span of spans) {
     const e = span.seg.entry;
@@ -172,6 +173,7 @@ export async function encodePart(part, opts) {
     if (staticBitmaps.has(key)) { span.bitmap = staticBitmaps.get(key); continue; }
     if (opts.pageMode && e.pdfPage && pages.has(e.pdfPage)) drawPageSlide(ctx, W, H, pages.get(e.pdfPage), th, opts.docTitle, span.seg.label);
     else drawDesignedSlide(ctx, W, H, e, th, opts.docTitle, span.seg.label);
+    if (opts.watermark) drawWatermark(ctx, W, H);
     span.bitmap = canvas.transferToImageBitmap();
     staticBitmaps.set(key, span.bitmap);
   }

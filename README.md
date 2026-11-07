@@ -4,9 +4,18 @@ Turns **PowerPoint (.pptx)**, **Word (.docx)** and **PDF** files into narrated *
 
 1. **Upload** a file. Slides, headings/sections or pages are read in the browser; the file is never uploaded.
 2. **Choose the voice and settings**: female or male narrator (5 voices each, American or British), speaking speed, maximum video length (3, 3½ or 4 minutes), slide style, colour theme, 720p or 1080p, and subtitles.
-3. **Instructions**: describe the tone, audience and level of detail you want. If you tick *Let AI write the narration* and paste an Anthropic API key, Claude rewrites the narration and on-screen points to follow your instructions. Without a key, the narration comes from the speaker notes, or from the slide/page text, plus an optional opening and closing line.
+3. **Instructions**: describe the tone, audience and level of detail you want. With the paid *AI narration* option, AI rewrites the narration and on-screen points to follow your instructions. Without it (free), the narration comes from the speaker notes, or from the slide/page text, plus an optional opening and closing line.
 4. **Review the script**: every slide's title, on-screen points and narration can be edited before rendering.
 5. **Generate**: the narration is recorded with the voice model, then the videos are built. When the narration is longer than the limit, it is split into *Part 1 of N*, *Part 2 of N* and so on. Each part starts with a title card and stays under the limit. If a single slide's narration is longer than the limit, that slide is continued in the next part.
+
+### Payments (Flutterwave)
+
+Visitors pay for two things. Everything else is free:
+
+- **AI narration** (default ₦1,000 per document, 3 rewrites)
+- **Downloading** the finished videos (default ₦1,500 per document). Before paying, videos are watermarked previews.
+
+Payments and the AI run through a small server in [`server/`](server/README.md), a free Cloudflare Worker that holds the Flutterwave and OpenRouter secret keys. Follow **[server/README.md](server/README.md)** to set it up, then put its address in `js/config.js` (`apiBase`). While `apiBase` is empty, payments are off: downloads are free and the AI option is hidden.
 
 ### Voice services
 
@@ -32,7 +41,8 @@ Everything runs client-side, so the site can be hosted on GitHub Pages or any st
 | PDF reading and page rendering | [PDF.js](https://mozilla.github.io/pdf.js/) |
 | Cloud voices (optional) | Google Cloud Text-to-Speech REST API, Azure Speech REST API |
 | Voice (text-to-speech) | [Kokoro-82M](https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX) via `kokoro-js`. Uses WebGPU when available, otherwise several CPU workers. The ~90 MB model downloads once and is then cached. |
-| AI script writing (optional) | Claude via the Anthropic JavaScript SDK, called from the browser with the user's own key |
+| AI script writing (paid) | OpenRouter, called only from the payment server so the key stays secret |
+| Payments | Flutterwave inline checkout, verified by the server in `server/` |
 | MP4 encoding | WebCodecs (H.264 + AAC) and `mp4-muxer` |
 
 ### Browser support

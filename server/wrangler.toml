@@ -1,0 +1,34 @@
+# Cloudflare Worker settings for the Doc-to-Video backend.
+# Deploy steps are in server/README.md.
+
+name = "doc-to-video-api"
+main = "worker.js"
+compatibility_date = "2025-10-01"
+
+# Storage for orders and receipts. Replace the id with the one printed by:
+#   npx wrangler kv namespace create ORDERS
+[[kv_namespaces]]
+binding = "ORDERS"
+id = "REPLACE_WITH_YOUR_KV_NAMESPACE_ID"
+
+[vars]
+# Website(s) allowed to call this API (comma-separated, no trailing slash).
+ALLOWED_ORIGINS = "https://mikeade3000.github.io"
+SITE_NAME = "Adelani Doc-to-Video"
+
+# Prices, in CURRENCY (whole units, e.g. naira).
+CURRENCY = "NGN"
+PRICE_AI = "1000"        # AI narration for one document
+PRICE_DOWNLOAD = "1500"  # Downloading the videos of one document
+AI_USES_PER_PAYMENT = "3"
+
+# Flutterwave PUBLIC key (safe to share). Use the FLWPUBK_TEST-… key while testing.
+FLW_PUBLIC_KEY = "FLWPUBK_TEST-REPLACE_ME-X"
+
+# AI model on OpenRouter (see https://openrouter.ai/models).
+OPENROUTER_MODEL = "anthropic/claude-sonnet-5.5"
+
+# Secrets are NOT stored here. Set them with:
+#   npx wrangler secret put FLW_SECRET_KEY
+#   npx wrangler secret put OPENROUTER_API_KEY
+#   npx wrangler secret put FLW_WEBHOOK_HASH   (optional)

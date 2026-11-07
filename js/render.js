@@ -230,3 +230,33 @@ export function captionChunks(text, maxChars = 110) {
   if (cur) out.push(cur);
   return out;
 }
+
+// Diagonal "PREVIEW" watermark for unpaid videos.
+export function drawWatermark(ctx, W, H, label = 'PREVIEW') {
+  const k = W / 1280;
+  ctx.save();
+  ctx.translate(W / 2, H / 2);
+  ctx.rotate(-Math.PI / 7);
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.font = `800 ${150 * k}px ${FONT}`;
+  ctx.fillStyle = 'rgba(255,255,255,0.13)';
+  ctx.strokeStyle = 'rgba(0,0,0,0.13)';
+  ctx.lineWidth = 3 * k;
+  ctx.fillText(label, 0, 0);
+  ctx.strokeText(label, 0, 0);
+  ctx.font = `700 ${34 * k}px ${FONT}`;
+  for (const dy of [-230, 230]) {
+    ctx.fillText(label, -320 * k, dy * k);
+    ctx.fillText(label, 320 * k, dy * k);
+  }
+  ctx.restore();
+  ctx.fillStyle = 'rgba(0,0,0,0.6)';
+  ctx.fillRect(0, 14 * k, W, 34 * k);
+  ctx.fillStyle = '#ffffff';
+  ctx.font = `600 ${18 * k}px ${FONT}`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('Preview — purchase to download the full-quality video without watermark', W / 2, 31 * k);
+  ctx.textAlign = 'left';
+}

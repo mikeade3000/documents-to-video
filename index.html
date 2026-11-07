@@ -83,6 +83,14 @@
     .notice { padding: 10px 12px; border-radius: 8px; background: var(--accent-soft); font-size: 0.9rem; }
     .notice.warn { color: var(--warn); }
     .hidden { display: none !important; }
+    dialog#pay-dialog { border: 1px solid var(--line); border-radius: var(--radius); background: var(--card); color: var(--text); padding: 22px; width: min(440px, calc(100vw - 32px)); }
+    dialog#pay-dialog::backdrop { background: rgba(0, 0, 0, 0.5); }
+    dialog#pay-dialog form { display: grid; gap: 12px; }
+    dialog#pay-dialog h3 { margin: 0; }
+    dialog#pay-dialog p { margin: 0; }
+    .pay-price { font-size: 1.6rem; font-weight: 700; }
+    .pay-msg:empty { display: none; }
+    .status.err, .pay-msg.err { color: var(--err); }
     footer { text-align: center; color: var(--muted); font-size: 0.85rem; padding: 10px 16px 30px; }
   </style>
 </head>
@@ -209,16 +217,10 @@
           <input id="outro" type="text" placeholder="Thank you for watching." />
         </label>
       </div>
-      <div class="ai-box">
-        <label class="check"><input id="use-ai" type="checkbox" /> Let AI (Claude) write the narration script from my instructions</label>
-        <div id="ai-fields" class="hidden" style="display:grid;gap:10px">
-          <label class="field">Anthropic API key
-            <input id="api-key" type="password" autocomplete="off" placeholder="sk-ant-…" />
-            <span class="hint">Sent only from your browser to api.anthropic.com. Get a key at console.anthropic.com.</span>
-          </label>
-          <label class="check"><input id="remember-key" type="checkbox" /> Remember the key on this computer</label>
-        </div>
-        <div class="muted">Without AI, the script is built straight from your document and your opening/closing lines. You can edit every slide's narration in the next step either way.</div>
+      <div class="ai-box" id="ai-box">
+        <label class="check"><input id="use-ai" type="checkbox" /> <span>Let AI write the narration script from my instructions <b id="ai-price"></b></span></label>
+        <div id="ai-status" class="muted"></div>
+        <div class="muted">Without AI (free), the script is built straight from your document and your opening/closing lines. You can edit every slide's narration in the next step either way.</div>
       </div>
       <div class="row" style="margin-top:14px">
         <button id="build-script" class="primary" disabled>Prepare script</button>
@@ -244,6 +246,9 @@
     <!-- Step 5 -->
     <section id="results-card" class="card hidden">
       <h2><span class="step">5</span> Your videos</h2>
+      <div id="paywall" class="notice hidden">
+        These are <b>previews</b> with a watermark. Pay <b id="download-price"></b> once for this document to download clean MP4 videos (all parts, and any re-renders of this document).
+      </div>
       <div class="row">
         <button id="download-all" class="primary">Download all</button>
         <span id="results-note" class="muted"></span>
@@ -251,6 +256,27 @@
       <div class="results" id="results"></div>
     </section>
   </main>
+
+  <dialog id="pay-dialog" aria-labelledby="pay-title">
+    <form method="dialog" onsubmit="return false">
+      <h3 class="pay-title" id="pay-title"></h3>
+      <p class="pay-desc muted"></p>
+      <p class="pay-price"></p>
+      <label class="field">Email (for your receipt)
+        <input id="pay-email" type="email" autocomplete="email" required />
+      </label>
+      <label class="field">Name (optional)
+        <input id="pay-name" type="text" autocomplete="name" />
+      </label>
+      <p class="pay-msg status"></p>
+      <div class="row">
+        <button type="button" class="pay-go primary">Pay with Flutterwave</button>
+        <button type="button" class="pay-check hidden">I have paid</button>
+        <button type="button" class="pay-cancel">Cancel</button>
+      </div>
+      <p class="muted" style="margin-bottom:0">Card, bank transfer and USSD are accepted. Payments are processed securely by Flutterwave.</p>
+    </form>
+  </dialog>
 
   <footer>
     Your files are processed in your browser. The free voice model downloads once (about 90&nbsp;MB) and is then cached.
