@@ -1,0 +1,315 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Doc-to-Video Studio</title>
+<style>
+  :root { --ink: #0f1b3d; --muted: #5a6685; --line: #dfe4ef; --bg: #f3f5fa; --card: #fff; --brand: #1d3fa8; --brand-ink: #fff; --ok: #0e9f6e; --err: #c62839; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  header { background: linear-gradient(120deg, #0d2a66, #06122e); color: #fff; padding: 36px 16px 76px; }
+  header > div, main { max-width: 880px; margin: 0 auto; }
+  header h1 { margin: 0; font-size: clamp(26px, 5vw, 36px); letter-spacing: -.01em; }
+  header h1 span { color: #f0bd2c; }
+  header p { margin: 8px 0 0; color: #c5d2ee; max-width: 60ch; }
+  main { padding: 0 16px 60px; margin-top: -48px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 24px; margin-bottom: 18px; box-shadow: 0 6px 24px rgba(15, 27, 61, .06); }
+  h2 { margin: 0 0 4px; font-size: 19px; }
+  .hint { color: var(--muted); font-size: 14px; margin: 0 0 16px; }
+  label.f { display: block; font-weight: 600; font-size: 14px; margin: 16px 0 6px; }
+  textarea, input[type=text], input[type=password], select { width: 100%; font: inherit; color: inherit; padding: 11px 12px; border: 1.5px solid var(--line); border-radius: 10px; background: #fff; }
+  textarea { min-height: 110px; resize: vertical; }
+  textarea:focus, input:focus, select:focus, button:focus-visible, .drop:focus-visible { outline: 3px solid #9db4ff; outline-offset: 1px; }
+  .drop { border: 2px dashed #b9c3da; border-radius: 14px; padding: 26px 16px; text-align: center; cursor: pointer; background: #f8faff; transition: background .15s, border-color .15s; }
+  .drop.over { background: #e8eeff; border-color: var(--brand); }
+  .drop strong { color: var(--brand); }
+  .files { list-style: none; padding: 0; margin: 12px 0 0; display: grid; gap: 8px; }
+  .files li { display: flex; align-items: center; gap: 10px; padding: 9px 12px; background: #f3f5fa; border-radius: 10px; font-size: 14px; }
+  .files li span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .files li small { color: var(--muted); }
+  .files button { border: 0; background: none; color: var(--err); font: inherit; font-weight: 600; cursor: pointer; padding: 2px 6px; }
+  .or { text-align: center; color: var(--muted); font-size: 13px; font-weight: 700; letter-spacing: .12em; margin: 18px 0 0; }
+  .row { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 0 18px; }
+  .swatches { display: flex; flex-wrap: wrap; gap: 10px; }
+  .swatches label { cursor: pointer; }
+  .swatches input { position: absolute; opacity: 0; }
+  .sw { display: flex; align-items: center; gap: 8px; padding: 7px 12px 7px 8px; border: 1.5px solid var(--line); border-radius: 999px; font-size: 14px; font-weight: 600; background: #fff; }
+  .sw i { width: 22px; height: 22px; border-radius: 50%; border: 1px solid rgba(0, 0, 0, .15); }
+  .swatches input:checked + .sw { border-color: var(--brand); box-shadow: 0 0 0 3px #c9d6ff; }
+  .swatches input:focus-visible + .sw { outline: 3px solid #9db4ff; }
+  .check { display: flex; align-items: center; gap: 10px; margin-top: 16px; font-size: 15px; }
+  .check input { width: 18px; height: 18px; }
+  .colors { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; margin-top: 10px; }
+  .colors label { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+  input[type=color] { width: 44px; height: 34px; padding: 2px; border: 1.5px solid var(--line); border-radius: 8px; background: #fff; }
+  details summary { cursor: pointer; font-weight: 600; margin-top: 18px; }
+  .go { width: 100%; font: inherit; font-weight: 700; font-size: 18px; padding: 16px; border: 0; border-radius: 12px; background: var(--brand); color: var(--brand-ink); cursor: pointer; }
+  .go:hover { background: #17338a; }
+  .go:disabled { opacity: .55; cursor: default; }
+  .btn { display: inline-block; font: inherit; font-weight: 700; padding: 12px 18px; border-radius: 10px; border: 1.5px solid var(--brand); color: var(--brand); background: #fff; text-decoration: none; cursor: pointer; }
+  .btn.primary { background: var(--brand); color: #fff; }
+  .msg { padding: 12px 14px; border-radius: 10px; font-size: 15px; margin-top: 14px; }
+  .msg.err { background: #fdecee; color: #8f1422; border: 1px solid #f5c2c8; }
+  .msg.info { background: #eef3ff; color: #1b2f73; border: 1px solid #cdd9ff; }
+  .stages { list-style: none; padding: 0; margin: 16px 0; display: grid; gap: 10px; }
+  .stages li { display: flex; align-items: center; gap: 12px; color: var(--muted); }
+  .stages li b { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; background: #e6eaf3; color: var(--muted); font-size: 13px; flex: none; }
+  .stages li.now { color: var(--ink); font-weight: 600; }
+  .stages li.now b { background: var(--brand); color: #fff; }
+  .stages li.ok b { background: var(--ok); color: #fff; }
+  .bar { height: 10px; border-radius: 5px; background: #e6eaf3; overflow: hidden; }
+  .bar i { display: block; height: 100%; width: 0; background: var(--brand); transition: width .4s; }
+  .viewer { margin-top: 18px; border-radius: 12px; overflow: hidden; background: #000; }
+  .viewer iframe { display: block; width: 100%; aspect-ratio: 1920 / 1124; border: 0; }
+  .viewer video { display: block; width: 100%; aspect-ratio: 16 / 9; }
+  .actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<header><div>
+  <h1>Doc-to-Video <span>Studio</span></h1>
+  <p>Upload a document or describe what you need. You get back a narrated, animated explainer video, ready to download as an MP4.</p>
+</div></header>
+
+<main>
+  <form id="form">
+    <section class="card">
+      <h2>1. What is the video about?</h2>
+      <p class="hint">Upload the source material, describe the video, or do both.</p>
+      <div class="drop" id="drop" tabindex="0" role="button" aria-label="Choose files to upload">
+        <div><strong>Choose files</strong> or drop them here</div>
+        <div class="hint" id="dropHint" style="margin:6px 0 0"></div>
+      </div>
+      <input type="file" id="fileInput" multiple hidden>
+      <ul class="files" id="fileList"></ul>
+      <p class="or">AND / OR</p>
+      <label class="f" for="prompt">Describe the video</label>
+      <textarea id="prompt" placeholder="Example: A two-minute advert for our exam paper generator, aimed at university examination officers. Focus on fairness, security and how it never repeats a used question. End by inviting them to book a demonstration."></textarea>
+    </section>
+
+    <section class="card">
+      <h2>2. Style</h2>
+      <p class="hint">Sensible defaults are selected. Change only what you need.</p>
+      <div class="row">
+        <div><label class="f" for="style">Type of video</label>
+          <select id="style">
+            <option value="explainer">Explainer / guide</option>
+            <option value="advert">Product advert</option>
+            <option value="training">Training / how-to</option>
+            <option value="summary">Executive summary</option>
+          </select></div>
+        <div><label class="f" for="length">Length</label><select id="length"></select></div>
+        <div id="voiceWrap"><label class="f" for="voice">Narrator voice</label><select id="voice"></select></div>
+        <div><label class="f" for="resolution">Quality</label>
+          <select id="resolution"><option value="1080">Full HD (1080p)</option><option value="720">HD (720p, faster)</option></select></div>
+      </div>
+      <div class="msg info" id="noVoice" hidden>No voice service is configured on this server, so videos are made silent with on-screen captions.</div>
+      <label class="f">Colour theme</label>
+      <div class="swatches" id="themes"></div>
+      <label class="check"><input type="checkbox" id="captions" checked> Show captions on screen</label>
+      <details>
+        <summary>Branding (optional)</summary>
+        <div class="row">
+          <div><label class="f" for="brand">Name shown in the video</label><input type="text" id="brand" maxlength="48" placeholder="Taken from your document if left empty"></div>
+          <div><label class="f" for="logo">Logo</label><input type="file" id="logo" accept=".png,.jpg,.jpeg,.webp,.svg"></div>
+        </div>
+        <label class="check"><input type="checkbox" id="useColors"> Use my brand colours instead of a theme</label>
+        <div class="colors" id="colors" hidden>
+          <label><input type="color" id="primaryColor" value="#0d2a66"> Background</label>
+          <label><input type="color" id="accentColor" value="#f0bd2c"> Highlight</label>
+        </div>
+      </details>
+    </section>
+
+    <section class="card">
+      <div id="codeWrap" hidden><label class="f" for="code" style="margin-top:0">Access code</label><input type="password" id="code" autocomplete="off"><div style="height:16px"></div></div>
+      <button class="go" id="go" type="submit">Create video</button>
+      <div class="msg err" id="formError" role="alert" hidden></div>
+    </section>
+  </form>
+
+  <section class="card" id="progress" hidden>
+    <h2 id="jobTitle">Making your video</h2>
+    <p class="hint" id="jobHint">This usually takes two to five minutes. You can leave this page open.</p>
+    <ol class="stages" id="stages">
+      <li data-s="reading"><b>1</b> Reading your material</li>
+      <li data-s="writing"><b>2</b> Writing the storyboard and script</li>
+      <li data-s="voicing"><b>3</b> Recording the voice-over</li>
+      <li data-s="rendering"><b>4</b> Rendering the video</li>
+    </ol>
+    <div class="bar" id="barWrap"><i id="bar"></i></div>
+    <div class="msg err" id="jobError" role="alert" hidden></div>
+    <div class="viewer" id="viewer" hidden></div>
+    <div class="actions" id="actions" hidden>
+      <a class="btn primary" id="dlVideo" download>Download MP4</a>
+      <a class="btn" id="dlStory" download>Download storyboard (JSON)</a>
+      <button class="btn" id="again" type="button">Make another video</button>
+    </div>
+  </section>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const store = { get(k) { try { return localStorage.getItem(k); } catch { return null; } }, set(k, v) { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch {} } };
+let cfg = { accept: [], maxFiles: 8, maxFileMb: 25 };
+let files = [];
+
+function option(sel, value, label) { const o = document.createElement('option'); o.value = value; o.textContent = label; sel.append(o); }
+
+async function init() {
+  cfg = await (await fetch('/api/config')).json();
+  cfg.lengths.forEach((l) => option($('length'), l.id, l.label));
+  $('length').value = 'standard';
+  if (cfg.voices.length) cfg.voices.forEach((v) => option($('voice'), v.id, v.label));
+  else { $('voiceWrap').hidden = true; $('noVoice').hidden = false; }
+  const themes = [{ id: 'auto', label: 'Automatic', bg: 'conic-gradient(#0d2a66, #0c6a35, #8a1228, #3a1c7a, #0d2a66)' }, ...cfg.themes];
+  themes.forEach((t, i) => {
+    const label = document.createElement('label');
+    const input = Object.assign(document.createElement('input'), { type: 'radio', name: 'theme', value: t.id, checked: i === 0 });
+    const sw = document.createElement('span'); sw.className = 'sw';
+    const dot = document.createElement('i'); dot.style.background = t.accent ? `linear-gradient(135deg, ${t.bg} 55%, ${t.accent} 55%)` : t.bg;
+    sw.append(dot, t.label); label.append(input, sw); $('themes').append(label);
+  });
+  $('fileInput').accept = cfg.accept.join(',');
+  $('dropHint').textContent = `PDF, Word, PowerPoint, text or images. Up to ${cfg.maxFiles} files, ${cfg.maxFileMb} MB each.`;
+  $('codeWrap').hidden = !cfg.needsCode;
+  $('code').value = store.get('d2v-code') || '';
+  const last = store.get('d2v-job');
+  if (last) follow(last, true);
+}
+
+// ---- files ----
+function addFiles(list) {
+  hideError();
+  for (const f of list) {
+    const ext = (f.name.match(/\.[^.]+$/) || [''])[0].toLowerCase();
+    if (!cfg.accept.includes(ext)) { showError(`"${f.name}" is not a supported file type.`); continue; }
+    if (f.size > cfg.maxFileMb * 1024 * 1024) { showError(`"${f.name}" is larger than ${cfg.maxFileMb} MB.`); continue; }
+    if (files.length >= cfg.maxFiles) { showError(`You can upload up to ${cfg.maxFiles} files.`); break; }
+    if (!files.some((x) => x.name === f.name && x.size === f.size)) files.push(f);
+  }
+  drawFiles();
+}
+function drawFiles() {
+  const ul = $('fileList'); ul.textContent = '';
+  files.forEach((f, i) => {
+    const li = document.createElement('li');
+    const name = document.createElement('span'); name.textContent = f.name;
+    const size = document.createElement('small'); size.textContent = f.size > 1048576 ? (f.size / 1048576).toFixed(1) + ' MB' : Math.ceil(f.size / 1024) + ' KB';
+    const rm = document.createElement('button'); rm.type = 'button'; rm.textContent = 'Remove'; rm.setAttribute('aria-label', 'Remove ' + f.name);
+    rm.onclick = () => { files.splice(i, 1); drawFiles(); };
+    li.append(name, size, rm); ul.append(li);
+  });
+}
+const drop = $('drop');
+drop.onclick = () => $('fileInput').click();
+drop.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $('fileInput').click(); } };
+$('fileInput').onchange = (e) => { addFiles(e.target.files); e.target.value = ''; };
+['dragenter', 'dragover'].forEach((ev) => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.add('over'); }));
+['dragleave', 'drop'].forEach((ev) => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.remove('over'); }));
+drop.addEventListener('drop', (e) => addFiles(e.dataTransfer.files));
+$('useColors').onchange = (e) => { $('colors').hidden = !e.target.checked; };
+
+// ---- submit ----
+function showError(t) { const e = $('formError'); e.textContent = t; e.hidden = false; }
+function hideError() { $('formError').hidden = true; }
+
+$('form').onsubmit = async (e) => {
+  e.preventDefault();
+  hideError();
+  if (!files.length && $('prompt').value.trim().length < 10) return showError('Upload a document or describe the video you want in a sentence or two.');
+  const fd = new FormData();
+  files.forEach((f) => fd.append('files', f));
+  if ($('logo').files[0]) fd.append('logo', $('logo').files[0]);
+  fd.append('prompt', $('prompt').value);
+  ['style', 'length', 'voice', 'resolution', 'brand'].forEach((k) => fd.append(k, $(k).value));
+  fd.append('theme', document.querySelector('input[name=theme]:checked').value);
+  fd.append('captions', $('captions').checked ? 'on' : 'off');
+  if ($('useColors').checked) { fd.append('primaryColor', $('primaryColor').value); fd.append('accentColor', $('accentColor').value); }
+  $('go').disabled = true; $('go').textContent = 'Uploading...';
+  try {
+    store.set('d2v-code', $('code').value || null);
+    const res = await fetch('/api/jobs', { method: 'POST', body: fd, headers: cfg.needsCode ? { 'x-access-code': $('code').value } : {} });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'The upload failed. Please try again.');
+    follow(data.id);
+  } catch (err) { showError(err.message); }
+  finally { $('go').disabled = false; $('go').textContent = 'Create video'; }
+};
+
+// ---- progress ----
+const ORDER = ['reading', 'writing', 'voicing', 'rendering', 'done'];
+let timer = null;
+let shown = '';
+
+function follow(id, resumed) {
+  store.set('d2v-job', id);
+  $('form').hidden = true; $('progress').hidden = false;
+  $('jobError').hidden = true; $('actions').hidden = true; $('viewer').hidden = true; $('viewer').textContent = '';
+  $('barWrap').hidden = false; $('stages').hidden = false; shown = '';
+  $('jobTitle').textContent = 'Making your video';
+  if (!resumed) $('progress').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  clearInterval(timer);
+  const tick = async () => {
+    let job;
+    try {
+      const res = await fetch(`/api/jobs/${id}`);
+      if (res.status === 404) { clearInterval(timer); store.set('d2v-job', null); return reset(); }
+      job = await res.json();
+    } catch { return; } // network blip: try again on the next tick
+    draw(id, job);
+    if (job.status === 'done' || job.status === 'error') clearInterval(timer);
+  };
+  tick();
+  timer = setInterval(tick, 1500);
+}
+
+function draw(id, job) {
+  const at = ORDER.indexOf(job.status);
+  document.querySelectorAll('#stages li').forEach((li) => {
+    const i = ORDER.indexOf(li.dataset.s);
+    li.className = job.status === 'error' ? '' : i < at ? 'ok' : i === at ? 'now' : '';
+  });
+  const overall = { queued: 0.02, reading: 0.05, writing: 0.2, voicing: 0.3 + 0.1 * job.progress, rendering: 0.4 + 0.6 * job.progress, done: 1 }[job.status] ?? 0;
+  $('bar').style.width = Math.round(overall * 100) + '%';
+  if (job.title) $('jobTitle').textContent = job.title;
+  $('jobHint').textContent = job.status === 'queued' ? `Waiting in the queue (position ${job.queuePosition || 1}).`
+    : job.status === 'rendering' ? `Rendering ${Math.round(job.progress * 100)}%. You can watch a live preview below while the MP4 is prepared.`
+    : job.status === 'done' ? `Your ${Math.round(job.duration)}-second video is ready.${job.silent ? ' It has captions but no voice-over, because no voice service is configured.' : ''}`
+    : job.status === 'error' ? '' : 'This usually takes two to five minutes. You can leave this page open.';
+  if (job.status === 'error') {
+    $('jobError').textContent = job.error; $('jobError').hidden = false;
+    $('barWrap').hidden = true; $('stages').hidden = true; $('viewer').hidden = true;
+    $('actions').hidden = false; $('dlVideo').hidden = true; $('dlStory').hidden = true;
+    store.set('d2v-job', null);
+    return;
+  }
+  const view = job.status === 'done' ? 'video' : job.previewReady ? 'preview' : '';
+  if (view && view !== shown) {
+    shown = view;
+    const v = $('viewer'); v.textContent = ''; v.hidden = false;
+    if (view === 'video') {
+      const video = Object.assign(document.createElement('video'), { controls: true, src: `/api/jobs/${id}/video.mp4#t=2`, preload: 'metadata' });
+      v.append(video);
+      $('dlVideo').href = `/api/jobs/${id}/video.mp4?dl=1`; $('dlStory').href = `/api/jobs/${id}/storyboard.json?dl=1`;
+      $('dlVideo').hidden = false; $('dlStory').hidden = false; $('actions').hidden = false;
+      $('barWrap').hidden = true; $('stages').hidden = true;
+    } else {
+      v.append(Object.assign(document.createElement('iframe'), { src: `/player/?job=${id}`, title: 'Live preview', allow: 'autoplay' }));
+    }
+  }
+}
+
+function reset() {
+  clearInterval(timer); store.set('d2v-job', null);
+  $('progress').hidden = true; $('form').hidden = false;
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+$('again').onclick = reset;
+
+init().catch(() => showError('Could not reach the server. Please reload the page.'));
+</script>
+</body>
+</html>

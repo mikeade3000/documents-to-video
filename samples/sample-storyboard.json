@@ -1,0 +1,43 @@
+{
+  "title": "Exam Day Guide",
+  "brand": { "name": "Northfield Institute", "tagline": "Candidate guide", "icon": "graduation-cap", "footer": "Sample video produced with Doc-to-Video Studio" },
+  "theme": "emerald-gold",
+  "scenes": [
+    { "type": "title", "chapter": "Welcome", "eyebrow": "Candidate explainer", "heading": "Your Computer-Based *Examination*", "body": "Everything you need to know before, during and after", "icon": "graduation-cap",
+      "items": [ { "title": "Before", "text": "", "icon": "calendar", "value": "", "cue": 1 }, { "title": "During", "text": "", "icon": "pen-line", "value": "", "cue": 1 }, { "title": "After", "text": "", "icon": "circle-check", "value": "", "cue": 1 } ],
+      "note": "", "narration": [ "Hello, and welcome. If you are sitting the computer-based examination, this short video is for you.", "We will walk through what to do before, during and after your exam." ] },
+    { "type": "bullets", "chapter": "The challenge", "eyebrow": "Why it matters", "heading": "Exam day should hold *no surprises*", "body": "", "icon": "clock",
+      "items": [ { "title": "Know what to bring", "text": "", "icon": "check", "value": "", "cue": 1 }, { "title": "Know how to sign in", "text": "", "icon": "check", "value": "", "cue": 1 }, { "title": "Know how the timer works", "text": "", "icon": "check", "value": "", "cue": 2 } ],
+      "note": "", "narration": [ "Most problems on exam day come from small things that were never explained.", "So you will learn what to bring and how to sign in.", "And you will see exactly how the timer behaves." ] },
+    { "type": "cards", "chapter": "What to bring", "eyebrow": "Exam day checklist", "heading": "What to *bring*", "body": "", "icon": "list-checks",
+      "items": [
+        { "title": "Username & password", "text": "Exactly as issued to you", "icon": "key-round", "value": "", "cue": 0 },
+        { "title": "Valid ID", "text": "A valid means of identification", "icon": "id-card", "value": "", "cue": 1 },
+        { "title": "Your device", "text": "Laptop, tablet or smartphone", "icon": "laptop", "value": "", "cue": 2 },
+        { "title": "Charger or power bank", "text": "Never run out of battery", "icon": "battery-charging", "value": "", "cue": 2 },
+        { "title": "Internet data", "text": "Enough for a stable connection", "icon": "wifi", "value": "", "cue": 3 },
+        { "title": "Pens & plain paper", "text": "For the theory section", "icon": "pen-line", "value": "", "cue": 3 } ],
+      "note": "Arrive early, so you are settled before the countdown begins", "narration": [ "Bring your username and password, exactly as issued to you.", "Bring a valid means of identification.", "Bring your device, fully charged, with a charger or power bank.", "You will also need internet data, and pens with plain paper for the theory section.", "And a tip: arrive early, so you are settled before the countdown begins." ] },
+    { "type": "mockup", "chapter": "Sign in", "eyebrow": "Step one", "heading": "Open the *exam portal*", "body": "Use the browser on your own device.", "icon": "globe", "items": [], "note": "",
+      "mockup": { "device": "browser", "url": "exams.northfield.example", "title": "Welcome", "subtitle": "Enter the details issued to you", "fields": [ { "label": "Username", "value": "aisha.bello" }, { "label": "Password", "value": "••••••••" } ], "button": "Sign in" },
+      "narration": [ "Step one. Open the browser on your device and go to the exam portal.", "Type your username and password, then sign in." ] },
+    { "type": "steps", "chapter": "Sign in", "eyebrow": "Signing in", "heading": "Five steps to *start*", "body": "", "icon": "list-checks",
+      "items": [
+        { "title": "Username", "text": "Type it exactly as it was issued to you.", "icon": "user", "value": "", "cue": 0 },
+        { "title": "Password", "text": "Passwords are case sensitive, so check your caps lock.", "icon": "key-round", "value": "", "cue": 1 },
+        { "title": "Instructions", "text": "Read every instruction before you continue.", "icon": "book-open", "value": "", "cue": 2 },
+        { "title": "Confirm details", "text": "If anything is wrong, correct it right there.", "icon": "clipboard-check", "value": "", "cue": 3 },
+        { "title": "Start exam", "text": "When the countdown reaches zero, tap Start.", "icon": "play", "value": "", "cue": 4 } ],
+      "note": "", "narration": [ "First, enter your username.", "Next, type your password.", "Then read the instructions carefully.", "Confirm that your details are correct.", "Finally, when the countdown reaches zero, start your examination." ] },
+    { "type": "stats", "chapter": "The exam", "eyebrow": "Your paper", "heading": "The numbers to *remember*", "body": "", "icon": "timer",
+      "items": [ { "title": "questions in the paper", "text": "", "icon": "file-text", "value": "50", "cue": 0 }, { "title": "minutes on the clock", "text": "", "icon": "timer", "value": "45", "cue": 1 }, { "title": "minutes left when the timer turns red", "text": "", "icon": "triangle-alert", "value": "5", "cue": 2 } ],
+      "note": "Figures are illustrative sample data.", "narration": [ "Your paper has fifty questions.", "You have forty-five minutes to answer them.", "When five minutes remain, the timer turns red." ] },
+    { "type": "comparison", "chapter": "The exam", "eyebrow": "Good habits", "heading": "Small choices, *big difference*", "body": "", "icon": "scale", "items": [], "note": "",
+      "comparison": { "leftTitle": "Avoid", "leftPoints": [ "Arriving at the last minute", "A device on low battery", "Closing the browser tab" ], "rightTitle": "Do this", "rightPoints": [ "Arrive early and settle in", "Charge fully, bring a power bank", "Stay on the exam page" ] },
+      "narration": [ "Avoid arriving late, a low battery, or closing your browser tab.", "Instead, arrive early, charge fully, and stay on the exam page until you submit." ] },
+    { "type": "statement", "chapter": "After", "eyebrow": "", "heading": "Prepared candidates are *confident* candidates.", "body": "You now know what to expect.", "icon": "sparkles", "items": [], "note": "", "narration": [ "Prepared candidates are confident candidates, and you now know what to expect." ] },
+    { "type": "outro", "chapter": "After", "eyebrow": "Good luck", "heading": "Northfield *Institute*", "body": "We wish you every success in your examination.", "icon": "graduation-cap",
+      "items": [ { "title": "Prepared", "text": "", "icon": "circle-check", "value": "", "cue": -1 }, { "title": "On time", "text": "", "icon": "clock", "value": "", "cue": -1 }, { "title": "Confident", "text": "", "icon": "star", "value": "", "cue": -1 } ],
+      "note": "", "cta": { "text": "Review this guide any time", "url": "exams.northfield.example" }, "narration": [ "From all of us, good luck. We wish you every success." ] }
+  ]
+}

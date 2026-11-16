@@ -1,77 +1,97 @@
-# Adelani Doc-to-Video
+# Doc-to-Video Studio
 
-Turns **PowerPoint (.pptx)**, **Word (.docx)** and **PDF** files into narrated **MP4** videos.
+Upload a document (or describe what you want) and get back a narrated, animated
+explainer video as a 1080p MP4: title scenes, checklists, step-by-step walkthroughs,
+statistics, comparisons, device mock-ups, captions and a chapter bar.
 
-1. **Upload** a file. Slides, headings/sections or pages are read in the browser; the file is never uploaded.
-2. **Choose the voice and settings**: female or male narrator (5 voices each, American or British), speaking speed, maximum video length (3, 3½ or 4 minutes), slide style, colour theme, 720p or 1080p, and subtitles.
-3. **Instructions**: describe the tone, audience and level of detail you want. With the paid *AI narration* option, AI rewrites the narration and on-screen points to follow your instructions. Without it (free), the narration comes from the speaker notes, or from the slide/page text, plus an optional opening and closing line.
-4. **Review the script**: every slide's title, on-screen points and narration can be edited before rendering.
-5. **Generate**: the narration is recorded with the voice model, then the videos are built. When the narration is longer than the limit, it is split into *Part 1 of N*, *Part 2 of N* and so on. Each part starts with a title card and stays under the limit. If a single slide's narration is longer than the limit, that slide is continued in the next part.
+## How it works
 
-### Payments (Flutterwave)
+| Step | What does it | Why |
+| --- | --- | --- |
+| 1. Read the upload | `pdf-parse`, `mammoth`, `jszip` | PDF, Word, PowerPoint, text and images |
+| 2. Storyboard + script | **Claude API** (`claude-opus-5-5`, structured JSON output) | Decides the scenes, on-screen text and narration |
+| 3. Voice-over | **OpenAI text-to-speech** or **ElevenLabs** | Natural narration, one clip per scene |
+| 4. Animation | Headless Chromium (Playwright) drawing HTML/CSS scenes | Crisp text and brand-exact graphics |
+| 5. Encoding | ffmpeg | H.264 + AAC MP4 that plays everywhere |
 
-Visitors pay for two things. Everything else is free:
+These videos are motion graphics, so they are drawn and rendered rather than made with a
+generative video model (Sora, Veo, Runway). Those models cannot keep text, numbers and
+logos accurate, which is exactly what this kind of video depends on.
 
-- **AI narration** (default ₦1,000 per document, 3 rewrites)
-- **Downloading** the finished videos (default ₦1,500 per document). Before paying, videos are watermarked previews.
+## Run it on your computer
 
-Payments and the AI run through a small server in [`server/`](server/README.md), a free Cloudflare Worker that holds the Flutterwave and OpenRouter secret keys. Follow **[server/README.md](server/README.md)** to set it up, then put its address in `js/config.js` (`apiBase`). While `apiBase` is empty, payments are off: downloads are free and the AI option is hidden.
-
-### Voice services
-
-Choose the voice service in step 2:
-
-| Service | Speed | Cost | Setup |
-|---|---|---|---|
-| **Free in-browser voice** (default) | Depends on the computer: roughly 1–3 s per sentence on CPU | Free | None |
-| **Google Cloud Text-to-Speech** | About 30–60 s for a long document | Free allowance each month (1 million characters for Neural2 voices), then pay per character | Create a project at console.cloud.google.com, enable **Cloud Text-to-Speech API**, set up billing, then create an API key under *APIs & Services → Credentials* |
-| **Microsoft Azure Speech** (includes Nigerian, Kenyan and South African English voices) | About 30–60 s for a long document | Free tier (F0): 0.5 million characters/month but only 20 requests per minute, so use the Standard (S0) tier for speed | Create a **Speech service** resource in portal.azure.com, then copy *Key 1* and the *Region* from *Keys and Endpoint* |
-
-Keys are typed into the page and sent only from the visitor's browser to Google or Microsoft. Tick *Remember the key* to keep them on that computer.
-
-**Let visitors use your Google key:** put it in `js/config.js` (`googleApiKey`). The key is visible in the page source, so in Google Cloud Console restrict it to your website (*Application restrictions → Websites*, e.g. `https://mikeade3000.github.io/*`) and to the *Cloud Text-to-Speech API* only, and set a budget alert. Never put an Azure key in `config.js`: Azure keys can't be restricted to a website.
-
-### How it works
-
-Everything runs client-side, so the site can be hosted on GitHub Pages or any static host:
-
-| Step | Library |
-|---|---|
-| PPTX / DOCX reading | [JSZip](https://stuk.github.io/jszip/) + the browser's XML parser |
-| PDF reading and page rendering | [PDF.js](https://mozilla.github.io/pdf.js/) |
-| Cloud voices (optional) | Google Cloud Text-to-Speech REST API, Azure Speech REST API |
-| Voice (text-to-speech) | [Kokoro-82M](https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX) via `kokoro-js`. Uses WebGPU when available, otherwise several CPU workers. The ~90 MB model downloads once and is then cached. |
-| AI script writing (paid) | OpenRouter, called only from the payment server so the key stays secret |
-| Payments | Flutterwave inline checkout, verified by the server in `server/` |
-| MP4 encoding | WebCodecs (H.264 + AAC) and `mp4-muxer` |
-
-### Browser support
-
-Use **desktop Chrome or Edge**. On Windows and macOS the audio is AAC. On Linux, Chrome has no AAC encoder, so the MP4 uses Opus audio, which plays in Chrome, Firefox and VLC.
-
-### Host it
-
-It is a static site: upload `index.html`, the `js/` folder and `.nojekyll` to any web host that serves HTTPS (cPanel, Netlify, Vercel, Cloudflare Pages).
-
-**GitHub Pages:** in this repo go to *Settings → Pages*, set *Source* to *Deploy from a branch*, pick `main` and `/ (root)`, and save. After a minute the site is live at `https://mikeade3000.github.io/documents-to-video/`.
-
-### Run locally
-
-From the repository folder:
+Needs Node.js 20+, ffmpeg, and Chromium for Playwright.
 
 ```bash
-python3 -m http.server 8000
+npm install
+npx playwright install chromium
+cp .env.example .env      # then put your API keys in .env
+npm start
 ```
 
-Then open http://localhost:8000/. Pages must be served over http(s), not opened as `file://`, because they use JavaScript modules and workers.
+Open http://localhost:3000.
 
-### Limitations
+To check the renderer before adding any keys, `npm run sample` renders
+`samples/sample-storyboard.json` to `sample-output.mp4` (silent, with captions).
 
-- PowerPoint slides are **redrawn** in a clean template (title, bullet points, the main picture). They are not pixel-perfect copies of the original design. For exact visuals, export the deck to PDF and use **Original pages** style.
-- Old `.ppt` / `.doc` files must be re-saved as `.pptx` / `.docx`.
-- Scanned PDFs (images without text) have no text to read. Type the narration in the script step, or use AI mode.
-- Voice generation speed depends on the computer. The **Voice engine** setting chooses how it runs:
-  - **Auto** (default): tests the graphics card first, and uses the CPU if the card fails, is slow, or stops responding mid-job.
-  - **CPU:** works everywhere and uses several cores in parallel.
-  - **GPU:** fastest on good graphics cards, but needs a one-time 326 MB model download (the CPU model is 92 MB).
-- Long documents take a while: roughly 1–3 seconds per sentence on CPU. The status line shows a live clock and a time-left estimate. **Cancel** stops immediately, and sentences already recorded are reused when you press Generate again.
+## API keys
+
+Set these in `.env` (or in your host's environment settings). Never put them in the code.
+
+- `ANTHROPIC_API_KEY` (required): https://platform.claude.com
+- One voice provider:
+  - `OPENAI_API_KEY`: good quality at low cost; ten built-in voices.
+  - `ELEVENLABS_API_KEY`: the most natural voices, plus your own custom or cloned voices.
+    List the voices to offer in `ELEVENLABS_VOICES` as `Label:voiceId` pairs.
+
+Without a voice key the site still works and produces silent videos with captions.
+
+## Put it online
+
+The app runs Chromium and ffmpeg and keeps a job running for a few minutes, so it needs
+a host that runs a Docker container or a long-lived Node process: Render, Railway, Fly.io,
+or any VPS (DigitalOcean, Hetzner, AWS Lightsail). Static hosts, shared cPanel hosting and
+serverless functions (Vercel, Netlify) cannot run it.
+
+```bash
+docker build -t doc-to-video .
+docker run -d -p 3000:3000 --env-file .env -v d2v-data:/data doc-to-video
+```
+
+Recommended size: 2 CPU cores and 2 GB of RAM or more. More cores render faster
+(`RENDER_WORKERS` defaults to the core count minus one, up to 4).
+
+Before you share the link publicly, set `ACCESS_CODE` so only people with the code can
+spend your API credit, and keep `JOBS_PER_HOUR` low. Put the site behind HTTPS (the hosts
+above do this for you; on a VPS use Caddy or nginx).
+
+## Settings
+
+All settings are environment variables; see `.env.example` for the full list.
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `ACCESS_CODE` | none | Code visitors must enter before generating |
+| `JOBS_PER_HOUR` | 6 | Videos one IP address may make per hour |
+| `KEEP_HOURS` | 24 | How long finished videos stay downloadable |
+| `CONCURRENT_JOBS` | 1 | Videos rendered at the same time |
+| `MAX_FILE_MB` / `MAX_FILES` | 25 / 8 | Upload limits |
+| `CLAUDE_MODEL` | `claude-opus-5-5` | Storyboard model |
+
+## Project layout
+
+```
+server.js            web server and API routes
+src/extract.js       reads uploaded files
+src/storyboard.js    Claude prompt, JSON schema, validation
+src/tts.js           OpenAI / ElevenLabs narration
+src/timeline.js      scene, caption and reveal timings
+src/render.js        frame capture and ffmpeg encoding
+src/jobs.js          job queue and pipeline
+src/themes.js        colour themes (add your own here)
+player/              the scene renderer (HTML/CSS/JS); edit player.css to restyle scenes
+public/index.html    the upload page
+```
+
+Jobs are kept in memory and on disk, which suits a single server. To run several
+servers, move the queue to Redis and the files to object storage.
