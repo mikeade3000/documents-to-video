@@ -7,6 +7,7 @@ import { writeStoryboard, normalizeStoryboard } from './storyboard.js';
 import { narrate } from './tts.js';
 import { buildTimeline } from './timeline.js';
 import { audioDuration, mixNarration, renderVideo } from './render.js';
+import { storeEnabled, putFile, putJson, getFile, getJson } from './store.js';
 
 const jobs = new Map();
 const queue = [];
@@ -34,7 +35,52 @@ export async function getJob(id) {
     if (!['done', 'error'].includes(job.status)) Object.assign(job, { status: 'error', error: 'The server restarted while this video was being made. Please start it again.' });
     jobs.set(id, job);
     return job;
-  } catch { return null; }
+  } catch { return restoreJob(id); }
+}
+
+// --- Durable copies (only when STORAGE_URL is set) -----------------------------
+
+const JOB_FILES = ['video.mp4', 'storyboard.json', 'player.json', 'narration.m4a'];
+
+/** Copies a finished job to the object store so it survives the server's disk being wiped. */
+async function persistJob(job) {
+  if (!storeEnabled()) return;
+  try {
+    const dir = jobDir(job.id);
+    for (const name of JOB_FILES) await putFile(`jobs/${job.id}/${name}`, path.join(dir, name)).catch((err) => { if (err.code !== 'ENOENT') throw err; });
+    for (const name of await fs.readdir(path.join(dir, 'assets')).catch(() => [])) await putFile(`jobs/${job.id}/assets/${name}`, path.join(dir, 'assets', name));
+    await persistJobRecord(job); // written last: its presence means the copy is complete
+  } catch (err) { console.error(`[job ${job.id}] could not copy to storage:`, err.message); }
+}
+
+async function persistJobRecord(job) {
+  if (!storeEnabled()) return;
+  const { files, logo, presetStoryboard, ...rest } = job;
+  await putJson(`jobs/${job.id}/job.json`, rest);
+}
+
+/** Brings a finished job back from the object store after the local disk was wiped. */
+const restoring = new Map();
+function restoreJob(id) {
+  if (!storeEnabled()) return null;
+  if (!restoring.has(id)) {
+    restoring.set(id, (async () => {
+      try {
+        const job = await getJson(`jobs/${id}/job.json`);
+        if (!job || job.status !== 'done') return null;
+        const dir = jobDir(id);
+        await fs.mkdir(path.join(dir, 'assets'), { recursive: true });
+        for (const name of JOB_FILES) await getFile(`jobs/${id}/${name}`, path.join(dir, name));
+        const player = JSON.parse(await fs.readFile(path.join(dir, 'player.json'), 'utf8'));
+        for (const name of [...Object.values(player.assets || {}), player.logo].filter(Boolean)) await getFile(`jobs/${id}/assets/${name}`, path.join(dir, 'assets', name));
+        await fs.writeFile(path.join(dir, 'job.json'), JSON.stringify(job));
+        jobs.set(id, job);
+        return job;
+      } catch (err) { console.error(`[job ${id}] could not restore from storage:`, err.message); return null; }
+      finally { restoring.delete(id); }
+    })());
+  }
+  return restoring.get(id);
 }
 
 /** What the browser is allowed to see about a job. */
@@ -134,12 +180,16 @@ async function runJob(job) {
     onProgress: (p) => update(job, { progress: p }),
   });
   update(job, { status: 'done', progress: 1 });
+  await persistJob(job);
 }
 
 /** Records that a video has been paid for, which unlocks its download. */
 export async function markPaid(id, txRef) {
   const job = await getJob(id);
-  if (job && !job.paid) update(job, { paid: true, paidRef: txRef, paidAt: Date.now() });
+  if (job && !job.paid) {
+    update(job, { paid: true, paidRef: txRef, paidAt: Date.now() });
+    await persistJobRecord(job).catch((err) => console.error(`[job ${id}] could not record payment in storage:`, err.message));
+  }
 }
 
 /** Deletes jobs older than KEEP_HOURS (paid videos: PAID_KEEP_DAYS) so the disk does not fill up. */

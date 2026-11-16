@@ -68,6 +68,11 @@ low or set an `ACCESS_CODE`.
 
 ## Put it online
 
+**Cloudflare (recommended for this project):** follow [DEPLOY-CLOUDFLARE.md](DEPLOY-CLOUDFLARE.md).
+It runs the app as a Cloudflare Container behind a Worker, with videos kept in R2.
+
+**Any other host:**
+
 The app runs Chromium and ffmpeg and keeps a job running for a few minutes, so it needs
 a host that runs a Docker container or a long-lived Node process: Render, Railway, Fly.io,
 or any VPS (DigitalOcean, Hetzner, AWS Lightsail). Static hosts, shared cPanel hosting and
@@ -109,6 +114,9 @@ src/timeline.js      scene, caption and reveal timings
 src/render.js        frame capture and ffmpeg encoding
 src/jobs.js          job queue and pipeline
 src/payments.js      Flutterwave orders, verification and webhook
+src/store.js         optional R2 / S3 copy of finished videos and orders
+cloudflare/worker.js Cloudflare Worker that fronts the container
+wrangler.jsonc       Cloudflare deployment settings
 src/themes.js        colour themes (add your own here)
 player/              the scene renderer (HTML/CSS/JS); edit player.css to restyle scenes
 public/index.html    the upload page

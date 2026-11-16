@@ -2,3 +2,8 @@ node_modules
 data
 .env
 .git
+.github
+.wrangler
+cloudflare
+wrangler.jsonc
+sample-output.mp4

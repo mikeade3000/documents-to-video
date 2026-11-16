@@ -1,0 +1,30 @@
+// Cloudflare deployment settings. Deployed by .github/workflows/deploy-cloudflare.yml.
+{
+  "name": "doc-to-video",
+  "main": "cloudflare/worker.js",
+  "compatibility_date": "2026-01-01",
+
+  // The public address. The domain's DNS must be on Cloudflare (portals.com.ng is).
+  "routes": [{ "pattern": "ma-doc-to-vid.portals.com.ng", "custom_domain": true }],
+
+  // The app itself: built from ./Dockerfile and run as a Cloudflare Container.
+  // standard-3 = 2 vCPU, 8 GB memory. Use "standard-4" (4 vCPU) for faster rendering.
+  "containers": [
+    { "class_name": "VideoStudio", "image": "./Dockerfile", "instance_type": "standard-3", "max_instances": 1 }
+  ],
+  "durable_objects": { "bindings": [{ "name": "STUDIO", "class_name": "VideoStudio" }] },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["VideoStudio"] }],
+
+  // Non-secret settings. API keys are added as secrets in the dashboard, never here.
+  "vars": {
+    "SITE_NAME": "Adelani Doc-to-Video",
+    "CURRENCY": "NGN",
+    "PRICE_DOWNLOAD": "1500",
+    "JOBS_PER_HOUR": "6",
+    // R2 bucket for finished videos and paid orders (created by the deploy workflow)
+    "R2_BUCKET": "doc-to-video"
+  },
+  // Keeps secrets and settings added in the dashboard when a new version is deployed.
+  "keep_vars": true,
+  "observability": { "enabled": true }
+}

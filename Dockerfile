@@ -2,14 +2,14 @@
 # the "playwright" version in package.json.
 FROM mcr.microsoft.com/playwright:v1.63.0-noble
 
+# ffmpeg encodes the finished video.
 RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 COPY package.json package-lock.json ./
-RUN npm ci --omit=dev
+RUN npm ci --omit=dev && rm -rf /root/.npm
 COPY . .
 
 ENV NODE_ENV=production PORT=3000 DATA_DIR=/data
-VOLUME /data
 EXPOSE 3000
 CMD ["node", "server.js"]

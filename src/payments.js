@@ -5,6 +5,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { config } from './config.js';
 import { getJob, markPaid } from './jobs.js';
+import { storeEnabled, putJson, getJson } from './store.js';
 
 const FLW_API = 'https://api.flutterwave.com/v3';
 const ordersDir = () => path.join(config.dataDir, 'orders');
@@ -24,11 +25,13 @@ export class PayError extends Error {
 }
 
 async function readOrder(txRef) {
-  try { return JSON.parse(await fs.readFile(orderFile(txRef), 'utf8')); } catch { return null; }
+  try { return JSON.parse(await fs.readFile(orderFile(txRef), 'utf8')); } catch { /* not on this disk */ }
+  return storeEnabled() ? getJson(`orders/${txRef}.json`).catch(() => null) : null;
 }
 async function writeOrder(txRef, order) {
   await fs.mkdir(ordersDir(), { recursive: true });
   await fs.writeFile(orderFile(txRef), JSON.stringify(order));
+  if (storeEnabled()) await putJson(`orders/${txRef}.json`, order);
 }
 
 /** Creates an order for one finished video and returns what the Flutterwave checkout needs. */

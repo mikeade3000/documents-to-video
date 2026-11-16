@@ -4,16 +4,21 @@
   "description": "Turn a document or a description into a narrated, animated explainer video (MP4).",
   "type": "module",
   "private": true,
-  "engines": { "node": ">=20" },
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js",
-    "sample": "node scripts/render-sample.js"
+    "sample": "node scripts/render-sample.js",
+    "deploy": "wrangler deploy"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.8.0",
+    "@cloudflare/containers": "^0.3.7",
     "@fontsource-variable/inter": "^5.2.5",
     "@fontsource-variable/plus-jakarta-sans": "^5.2.5",
+    "aws4fetch": "^1.0.20",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
     "jszip": "^3.10.1",
@@ -22,5 +27,8 @@
     "multer": "^2.0.2",
     "pdf-parse": "1.1.1",
     "playwright": "1.63.0"
+  },
+  "devDependencies": {
+    "wrangler": "^4.163.0"
   }
 }

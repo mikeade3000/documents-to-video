@@ -17,6 +17,13 @@ export const config = {
   port: int(env.PORT, 3000),
   dataDir: path.resolve(env.DATA_DIR || './data'),
   accessCode: env.ACCESS_CODE || '',
+  // Durable object store for hosts with a temporary disk (see src/store.js).
+  // Cloudflare R2: set the account id and an R2 API token. Any S3-compatible store: set S3_ENDPOINT too.
+  r2AccountId: env.R2_ACCOUNT_ID || '',
+  r2AccessKeyId: env.R2_ACCESS_KEY_ID || '',
+  r2SecretAccessKey: env.R2_SECRET_ACCESS_KEY || '',
+  r2Bucket: env.R2_BUCKET || 'doc-to-video',
+  s3Endpoint: env.S3_ENDPOINT || '',
 
   // Storyboard + script writer
   claudeModel: env.CLAUDE_MODEL || 'claude-opus-5-5',
