@@ -46,6 +46,26 @@ Set these in `.env` (or in your host's environment settings). Never put them in 
 
 Without a voice key the site still works and produces silent videos with captions.
 
+## Payments (Flutterwave)
+
+With `FLW_PUBLIC_KEY` and `FLW_SECRET_KEY` set, visitors create and preview videos for
+free and pay once (default NGN 1,500, `PRICE_DOWNLOAD`) to download each MP4. Before
+payment only the in-page preview is available; the MP4 itself is not served.
+
+1. In the Flutterwave dashboard, copy the keys from *Settings → API keys* into `.env`.
+   Use the `TEST` keys first and pay with a Flutterwave test card.
+2. Optional but recommended: under *Settings → Webhooks* set the URL to
+   `https://YOUR-SITE/api/pay/webhook`, choose a secret hash, and put the same value in
+   `FLW_WEBHOOK_HASH`. This unlocks the video even if the buyer closes the page after paying.
+
+The server confirms every payment with Flutterwave (reference, amount and currency)
+before unlocking a download. Orders are stored in `DATA_DIR/orders`, and paid videos are
+kept for `PAID_KEEP_DAYS` (default 30), so use a persistent disk for `DATA_DIR`.
+Leave the keys empty and downloads are free.
+
+Creating a video costs you API credit even when nobody pays, so keep `JOBS_PER_HOUR`
+low or set an `ACCESS_CODE`.
+
 ## Put it online
 
 The app runs Chromium and ffmpeg and keeps a job running for a few minutes, so it needs
@@ -88,6 +108,7 @@ src/tts.js           OpenAI / ElevenLabs narration
 src/timeline.js      scene, caption and reveal timings
 src/render.js        frame capture and ffmpeg encoding
 src/jobs.js          job queue and pipeline
+src/payments.js      Flutterwave orders, verification and webhook
 src/themes.js        colour themes (add your own here)
 player/              the scene renderer (HTML/CSS/JS); edit player.css to restyle scenes
 public/index.html    the upload page

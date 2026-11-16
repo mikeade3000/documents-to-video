@@ -344,4 +344,5 @@
   stage.addEventListener('click', toggle);
   scrub.addEventListener('input', () => { t = parseFloat(scrub.value); if (audio) audio.currentTime = t; show(); });
   show();
+  seek(Math.min(2.2, TL.duration)); // show a filled frame, not the empty opening, until Play is pressed
 })();

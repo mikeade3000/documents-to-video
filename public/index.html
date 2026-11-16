@@ -64,6 +64,10 @@
   .viewer iframe { display: block; width: 100%; aspect-ratio: 1920 / 1124; border: 0; }
   .viewer video { display: block; width: 100%; aspect-ratio: 16 / 9; }
   .actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
+  .pay { margin-top: 18px; padding: 20px; border: 1.5px solid #cdd9ff; border-radius: 14px; background: #f6f8ff; }
+  .pay h3 { margin: 0 0 4px; font-size: 18px; }
+  .pay .price { font-size: 28px; font-weight: 800; color: var(--brand); margin: 6px 0 2px; }
+  .pay .actions { margin-top: 14px; }
   [hidden] { display: none !important; }
 </style>
 </head>
@@ -142,6 +146,20 @@
     <div class="bar" id="barWrap"><i id="bar"></i></div>
     <div class="msg err" id="jobError" role="alert" hidden></div>
     <div class="viewer" id="viewer" hidden></div>
+    <div class="pay" id="pay" hidden>
+      <h3>Your video is ready to download</h3>
+      <p class="hint" style="margin:0">Watch the full preview above. Pay once to download the MP4 without limits.</p>
+      <div class="price" id="payPrice"></div>
+      <div class="row">
+        <div><label class="f" for="payEmail">Email for your receipt</label><input type="text" id="payEmail" inputmode="email" autocomplete="email"></div>
+        <div><label class="f" for="payName">Name (optional)</label><input type="text" id="payName" autocomplete="name" maxlength="100"></div>
+      </div>
+      <div class="actions">
+        <button class="btn primary" id="payGo" type="button">Pay and download</button>
+        <button class="btn" id="payCheck" type="button" hidden>I have paid</button>
+      </div>
+      <div class="msg info" id="payMsg" role="status" hidden></div>
+    </div>
     <div class="actions" id="actions" hidden>
       <a class="btn primary" id="dlVideo" download>Download MP4</a>
       <a class="btn" id="dlStory" download>Download storyboard (JSON)</a>
@@ -243,11 +261,13 @@ $('form').onsubmit = async (e) => {
 const ORDER = ['reading', 'writing', 'voicing', 'rendering', 'done'];
 let timer = null;
 let shown = '';
+let currentJob = null;
 
 function follow(id, resumed) {
   store.set('d2v-job', id);
   $('form').hidden = true; $('progress').hidden = false;
-  $('jobError').hidden = true; $('actions').hidden = true; $('viewer').hidden = true; $('viewer').textContent = '';
+  $('jobError').hidden = true; $('actions').hidden = true; $('pay').hidden = true; $('viewer').hidden = true; $('viewer').textContent = '';
+  currentJob = id;
   $('barWrap').hidden = false; $('stages').hidden = false; shown = '';
   $('jobTitle').textContent = 'Making your video';
   if (!resumed) $('progress').scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -277,6 +297,7 @@ function draw(id, job) {
   if (job.title) $('jobTitle').textContent = job.title;
   $('jobHint').textContent = job.status === 'queued' ? `Waiting in the queue (position ${job.queuePosition || 1}).`
     : job.status === 'rendering' ? `Rendering ${Math.round(job.progress * 100)}%. You can watch a live preview below while the MP4 is prepared.`
+    : job.status === 'done' && locked(job) ? 'Your video is finished. Preview it below, then pay to download the MP4.'
     : job.status === 'done' ? `Your ${Math.round(job.duration)}-second video is ready.${job.silent ? ' It has captions but no voice-over, because no voice service is configured.' : ''}`
     : job.status === 'error' ? '' : 'This usually takes two to five minutes. You can leave this page open.';
   if (job.status === 'error') {
@@ -286,7 +307,8 @@ function draw(id, job) {
     store.set('d2v-job', null);
     return;
   }
-  const view = job.status === 'done' ? 'video' : job.previewReady ? 'preview' : '';
+  const view = job.status === 'done' && !locked(job) ? 'video' : job.previewReady ? 'preview' : '';
+  if (job.status === 'done' && locked(job)) showPay(id);
   if (view && view !== shown) {
     shown = view;
     const v = $('viewer'); v.textContent = ''; v.hidden = false;
@@ -295,16 +317,100 @@ function draw(id, job) {
       v.append(video);
       $('dlVideo').href = `/api/jobs/${id}/video.mp4?dl=1`; $('dlStory').href = `/api/jobs/${id}/storyboard.json?dl=1`;
       $('dlVideo').hidden = false; $('dlStory').hidden = false; $('actions').hidden = false;
-      $('barWrap').hidden = true; $('stages').hidden = true;
+      $('barWrap').hidden = true; $('stages').hidden = true; $('pay').hidden = true;
     } else {
       v.append(Object.assign(document.createElement('iframe'), { src: `/player/?job=${id}`, title: 'Live preview', allow: 'autoplay' }));
     }
   }
 }
 
+// ---- payments (Flutterwave) ----
+const locked = (job) => cfg.payments && cfg.payments.enabled && !job.paid;
+const pendingKey = (id) => 'd2v-pending:' + id;
+
+function payMsg(text, isErr) { const m = $('payMsg'); m.textContent = text; m.className = 'msg ' + (isErr ? 'err' : 'info'); m.hidden = !text; }
+
+function showPay(id) {
+  if (!$('pay').hidden) return;
+  let price = `${cfg.payments.currency} ${cfg.payments.price}`;
+  try { price = new Intl.NumberFormat(undefined, { style: 'currency', currency: cfg.payments.currency, maximumFractionDigits: 0 }).format(cfg.payments.price); } catch {}
+  $('payPrice').textContent = price;
+  $('payEmail').value = store.get('d2v-email') || '';
+  $('payName').value = store.get('d2v-name') || '';
+  $('payCheck').hidden = !store.get(pendingKey(id));
+  $('barWrap').hidden = true; $('stages').hidden = true;
+  $('actions').hidden = false; $('dlVideo').hidden = true; $('dlStory').hidden = true;
+  payMsg('');
+  $('pay').hidden = false;
+}
+
+async function post(path, body) {
+  let res;
+  try { res = await fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); }
+  catch { throw new Error('Could not reach the server. Check your internet connection and try again.'); }
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || `Server error (${res.status}).`);
+  return data;
+}
+
+let flwScript = null;
+function loadFlutterwave() {
+  if (window.FlutterwaveCheckout) return Promise.resolve();
+  if (!flwScript) flwScript = new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = 'https://checkout.flutterwave.com/v3.js';
+    s.onload = resolve;
+    s.onerror = () => { flwScript = null; reject(new Error('Could not load Flutterwave checkout. Check your internet connection.')); };
+    document.head.append(s);
+  });
+  return flwScript;
+}
+
+// Confirms the payment with the server, then reloads the job so the download unlocks.
+async function confirmPayment(id, txRef) {
+  payMsg('Confirming your payment...');
+  try {
+    await post('/api/pay/verify', { tx_ref: txRef });
+    store.set(pendingKey(id), null);
+    follow(id, true);
+  } catch (err) { payMsg(err.message, true); $('payGo').disabled = false; }
+}
+
+$('payCheck').onclick = () => confirmPayment(currentJob, store.get(pendingKey(currentJob)));
+
+$('payGo').onclick = async () => {
+  const id = currentJob;
+  const email = $('payEmail').value.trim();
+  const name = $('payName').value.trim();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return payMsg('Enter a valid email address for your receipt.', true);
+  store.set('d2v-email', email); store.set('d2v-name', name || null);
+  $('payGo').disabled = true;
+  payMsg('Opening secure checkout...');
+  try {
+    await loadFlutterwave();
+    const order = await post('/api/pay/start', { jobId: id, email, name });
+    if (order.alreadyPaid) return follow(id, true);
+    store.set(pendingKey(id), order.tx_ref);
+    $('payCheck').hidden = false;
+    let paid = false;
+    const modal = window.FlutterwaveCheckout({
+      public_key: order.public_key, tx_ref: order.tx_ref, amount: order.amount, currency: order.currency,
+      payment_options: 'card, banktransfer, ussd, account',
+      customer: order.customer,
+      customizations: { title: order.title, description: order.description },
+      callback: (payment) => { paid = true; if (modal && modal.close) modal.close(); confirmPayment(id, payment.tx_ref || order.tx_ref); },
+      onclose: () => {
+        if (paid) return;
+        $('payGo').disabled = false;
+        payMsg('Payment window closed. If you completed a bank transfer or USSD payment, press "I have paid".');
+      },
+    });
+  } catch (err) { payMsg(err.message, true); $('payGo').disabled = false; }
+};
+
 function reset() {
   clearInterval(timer); store.set('d2v-job', null);
-  $('progress').hidden = true; $('form').hidden = false;
+  $('progress').hidden = true; $('form').hidden = false; $('payGo').disabled = false;
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 $('again').onclick = reset;

@@ -37,6 +37,15 @@ export const config = {
   ffmpeg: env.FFMPEG_PATH || 'ffmpeg',
   ffprobe: env.FFPROBE_PATH || 'ffprobe',
 
+  // Payments (Flutterwave). Leave the keys empty to make downloads free.
+  flwPublicKey: env.FLW_PUBLIC_KEY || '',
+  flwSecretKey: env.FLW_SECRET_KEY || '',
+  flwWebhookHash: env.FLW_WEBHOOK_HASH || '',
+  priceDownload: int(env.PRICE_DOWNLOAD, 1500),
+  currency: env.CURRENCY || 'NGN',
+  siteName: env.SITE_NAME || 'Doc-to-Video Studio',
+  paidKeepDays: int(env.PAID_KEEP_DAYS, 30),
+
   // Limits
   maxFileMb: int(env.MAX_FILE_MB, 25),
   maxFiles: int(env.MAX_FILES, 8),

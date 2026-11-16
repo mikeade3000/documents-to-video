@@ -10,6 +10,7 @@ import { THEMES, resolveTheme } from './src/themes.js';
 import { LENGTHS, STYLES } from './src/storyboard.js';
 import { iconsFor } from './src/icons.js';
 import { createJob, getJob, publicJob, jobDir, cleanup } from './src/jobs.js';
+import { paymentInfo, paymentsEnabled, startPayment, verifyPayment, handleWebhook, PayError } from './src/payments.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const uploadDir = path.join(config.dataDir, 'uploads');
@@ -35,6 +36,7 @@ app.get('/api/config', (req, res) => {
     accept: ACCEPTED_EXT,
     maxFileMb: config.maxFileMb,
     maxFiles: config.maxFiles,
+    payments: paymentInfo(),
   });
 });
 
@@ -115,13 +117,25 @@ const sendJobFile = (name, type) => (req, res) => {
   }
   res.type(type).sendFile(file);
 };
-app.get('/api/jobs/:id/video.mp4', withJob, sendJobFile('video.mp4', 'video/mp4'));
+// With payments on, the MP4 is only served once the video has been paid for (the live preview stays free).
+const paidOnly = (req, res, next) => (paymentsEnabled() && !req.job.paid ? res.status(402).json({ error: 'Pay to download this video.' }) : next());
+app.get('/api/jobs/:id/video.mp4', withJob, paidOnly, sendJobFile('video.mp4', 'video/mp4'));
 app.get('/api/jobs/:id/narration.m4a', withJob, sendJobFile('narration.m4a', 'audio/mp4'));
 app.get('/api/jobs/:id/storyboard.json', withJob, sendJobFile('storyboard.json', 'application/json'));
 app.get('/api/jobs/:id/assets/:file', withJob, (req, res) => {
   const file = path.basename(req.params.file); // never leave the job's assets folder
   res.sendFile(path.join(jobDir(req.job.id), 'assets', file), (err) => { if (err && !res.headersSent) res.status(404).end(); });
 });
+
+// --- Payments (Flutterwave) --------------------------------------------------
+
+const json = express.json({ limit: '100kb' });
+const pay = (fn) => async (req, res, next) => {
+  try { res.json(await fn(req.body || {})); } catch (err) { err instanceof PayError ? res.status(err.status).json({ error: err.message }) : next(err); }
+};
+app.post('/api/pay/start', json, pay((b) => startPayment(b)));
+app.post('/api/pay/verify', json, pay((b) => verifyPayment(b.tx_ref)));
+app.post('/api/pay/webhook', json, async (req, res) => res.sendStatus(await handleWebhook(req.get('verif-hash'), req.body)));
 
 app.use((err, req, res, next) => { // eslint-disable-line no-unused-vars
   if (err instanceof multer.MulterError) {
@@ -145,6 +159,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   const server = await start();
   console.log(`Doc-to-Video Studio running on http://localhost:${server.address().port}`);
   console.log(`  storyboard: ${config.claudeModel}${process.env.ANTHROPIC_API_KEY ? '' : '  (ANTHROPIC_API_KEY is not set)'}`);
+  console.log(`  payments:   ${paymentsEnabled() ? `on (${config.currency} ${config.priceDownload} per download)` : 'off - downloads are free'}`);
   console.log(`  voice-over: ${config.ttsProvider === 'none' ? 'none configured - videos will be silent with captions' : config.ttsProvider}`);
   cleanup();
   setInterval(cleanup, 3600_000).unref();

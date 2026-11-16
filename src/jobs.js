@@ -43,7 +43,7 @@ export function publicJob(job) {
   return {
     id: job.id, status: job.status, progress: job.progress ?? 0, error: job.error || null,
     title: job.title || null, duration: job.duration || null, scenes: job.sceneCount || null,
-    previewReady: !!job.previewReady, silent: !!job.silent, queuePosition: pos >= 0 ? pos + 1 : 0,
+    previewReady: !!job.previewReady, silent: !!job.silent, paid: !!job.paid, queuePosition: pos >= 0 ? pos + 1 : 0,
   };
 }
 
@@ -136,14 +136,21 @@ async function runJob(job) {
   update(job, { status: 'done', progress: 1 });
 }
 
-/** Deletes jobs older than KEEP_HOURS so the disk does not fill up. */
+/** Records that a video has been paid for, which unlocks its download. */
+export async function markPaid(id, txRef) {
+  const job = await getJob(id);
+  if (job && !job.paid) update(job, { paid: true, paidRef: txRef, paidAt: Date.now() });
+}
+
+/** Deletes jobs older than KEEP_HOURS (paid videos: PAID_KEEP_DAYS) so the disk does not fill up. */
 export async function cleanup() {
   const root = path.join(config.dataDir, 'jobs');
-  const cutoff = Date.now() - config.keepHours * 3600_000;
   for (const id of await fs.readdir(root).catch(() => [])) {
     const stat = await fs.stat(path.join(root, id)).catch(() => null);
     const live = jobs.get(id);
-    if (stat && stat.mtimeMs < cutoff && (!live || ['done', 'error'].includes(live.status))) {
+    const job = live || (await getJob(id));
+    const keepMs = job?.paid ? config.paidKeepDays * 86400_000 : config.keepHours * 3600_000;
+    if (stat && stat.mtimeMs < Date.now() - keepMs && (!live || ['done', 'error'].includes(live.status))) {
       await fs.rm(path.join(root, id), { recursive: true, force: true });
       jobs.delete(id);
     }
